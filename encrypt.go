@@ -2,31 +2,35 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20"
 )
 
-func EncryptText(password string, cleartext string) ([]byte, [12]byte, [24]byte, error) {
+func EncryptText(password string, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
 	salt := [12]byte{}
 	_, err := rand.Read(salt[:])
 	if err != nil {
-		return []byte{}, salt, [24]byte{}, err
+		return []byte{}, salt, [16]byte{}, err
 	}
 	key := derive_key(password, salt)
-	nonce := [24]byte{}
-	_, err = rand.Read(nonce[:])
+	noncePfx := [16]byte{}
+	_, err = rand.Read(noncePfx[:])
 	if err != nil {
-		return []byte{}, salt, nonce, err
+		return []byte{}, salt, noncePfx, err
 	}
-	c, err := chacha20.NewUnauthenticatedCipher(key[:], nonce[:])
+	nonce := []byte{}
+	nonce = append(nonce, noncePfx[:]...)
+	nonce = binary.BigEndian.AppendUint64(nonce, time)
+	c, err := chacha20.NewUnauthenticatedCipher(key[:], nonce)
 	if err != nil {
-		return []byte{}, salt, nonce, err
+		return []byte{}, salt, noncePfx, err
 	}
 	src := []byte(cleartext)
 	dst := make([]byte, len(cleartext))
 	c.XORKeyStream(dst, src)
-	return dst, salt, nonce, err
+	return dst, salt, noncePfx, err
 }
 
 func DecryptText(password string, ciphertext []byte, salt [12]byte, nonce [24]byte) (string, error) {
