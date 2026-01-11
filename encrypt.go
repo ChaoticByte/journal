@@ -11,7 +11,7 @@ import (
 
 const ErrMsgInvalidNonceLen = "Assembled nonce has an invalid length!"
 
-func EncryptText(password string, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
+func EncryptText(password []byte, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
 	salt := [12]byte{}
 	_, err := rand.Read(salt[:])
 	if err != nil { return []byte{}, salt, [16]byte{}, err }
@@ -29,7 +29,7 @@ func EncryptText(password string, cleartext string, time uint64) ([]byte, [12]by
 	return dst, salt, noncePfx, err
 }
 
-func DecryptText(password string, ciphertext []byte, salt [12]byte, noncePfx [16]byte, time uint64) (string, error) {
+func DecryptText(password []byte, ciphertext []byte, salt [12]byte, noncePfx [16]byte, time uint64) (string, error) {
 	nonce := []byte{}
 	nonce = append(nonce, noncePfx[:]...)
 	nonce = binary.BigEndian.AppendUint64(nonce, time)
@@ -49,7 +49,7 @@ const a2_time = 10
 const a2_mem = 128*1024
 const a2_thr = 2
 
-func derive_key(password string, salt [12]byte) [32]byte {
+func derive_key(password []byte, salt [12]byte) [32]byte {
 	return [32]byte(
-		argon2.IDKey([]byte(password), salt[:], a2_time, a2_mem, a2_thr, 32))
+		argon2.IDKey(password, salt[:], a2_time, a2_mem, a2_thr, 32))
 }

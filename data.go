@@ -202,7 +202,7 @@ type EncryptedEntry struct {
 	EncryptedText []byte
 }
 
-func (e *EncryptedEntry) Decrypt(password string) (string, error) {
+func (e *EncryptedEntry) Decrypt(password []byte) (string, error) {
 	txt, err := DecryptText(password, e.EncryptedText, e.Salt, e.NoncePfx, e.Timestamp)
 	return txt, err
 }
@@ -211,7 +211,7 @@ func (e *EncryptedEntry) EtLength() uint32 {
 	return uint32(len(e.EncryptedText))
 }
 
-func NewEncryptedEntry(text string, password string) (*EncryptedEntry, error) {
+func NewEncryptedEntry(text string, password []byte) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
 	e.Timestamp = uint64(time.Now().UnixMicro())
 	e.Hidden = false
