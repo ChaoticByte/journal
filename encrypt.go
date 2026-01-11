@@ -45,8 +45,8 @@ func DecryptText(password string, ciphertext []byte, salt [12]byte, nonce [24]by
 
 // internal
 
-const a2_time = 1
-const a2_mem = 64*1024
+const a2_time = 10
+const a2_mem = 128*1024
 const a2_thr = 2
 
 func derive_key(password string, salt [12]byte) [32]byte {
