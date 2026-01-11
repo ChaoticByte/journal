@@ -9,7 +9,7 @@ import (
 const ErrMsgInvalidNonceLen = "Assembled nonce has an invalid length!"
 
 type EncryptedEntry struct {
-	Timestamp uint64  // Unix time in s
+	Timestamp uint64  // Unix time in microseconds, works until year 294246
 	Hidden bool
 	Salt [12]byte
 	NoncePfx [16]byte // Nonce = random 16 bytes prefix + 8 byte timestamp
@@ -34,7 +34,7 @@ func (e *EncryptedEntry) EtLength() uint32 {
 
 func NewEncryptedEntry(text string, password string) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
-	e.Timestamp = uint64(time.Now().Unix())
+	e.Timestamp = uint64(time.Now().UnixMicro())
 	e.Hidden = false
 	ct, s, n, err := EncryptText(password, text, e.Timestamp)
 	if err != nil {
