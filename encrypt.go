@@ -3,49 +3,43 @@ package main
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/chacha20"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 func EncryptText(password string, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
 	salt := [12]byte{}
 	_, err := rand.Read(salt[:])
-	if err != nil {
-		return []byte{}, salt, [16]byte{}, err
-	}
+	if err != nil { return []byte{}, salt, [16]byte{}, err }
 	key := derive_key(password, salt)
 	noncePfx := [16]byte{}
 	_, err = rand.Read(noncePfx[:])
-	if err != nil {
-		return []byte{}, salt, noncePfx, err
-	}
+	if err != nil { return []byte{}, salt, noncePfx, err }
+	aead, err := chacha20poly1305.NewX(key[:])
+	if err != nil { return []byte{}, salt, noncePfx, err }
 	nonce := []byte{}
 	nonce = append(nonce, noncePfx[:]...)
 	nonce = binary.BigEndian.AppendUint64(nonce, time)
-	c, err := chacha20.NewUnauthenticatedCipher(key[:], nonce)
-	if err != nil {
-		return []byte{}, salt, noncePfx, err
-	}
 	src := []byte(cleartext)
-	dst := make([]byte, len(cleartext))
-	c.XORKeyStream(dst, src)
+	dst := aead.Seal(nil, nonce, src, nil)
 	return dst, salt, noncePfx, err
 }
 
-func DecryptText(password string, ciphertext []byte, salt [12]byte, nonce [24]byte) (string, error) {
+func DecryptText(password string, ciphertext []byte, salt [12]byte, noncePfx [16]byte, time uint64) (string, error) {
+	nonce := []byte{}
+	nonce = append(nonce, noncePfx[:]...)
+	nonce = binary.BigEndian.AppendUint64(nonce, time)
+	if len(nonce) != 24 { return "", errors.New(ErrMsgInvalidNonceLen) }
 	key := derive_key(password, salt)
-	c, err := chacha20.NewUnauthenticatedCipher(key[:], nonce[:])
-	if err != nil {
-		return "", err
-	}
-	dst := make([]byte, len(ciphertext))
-	c.XORKeyStream(dst, ciphertext)
+	aead, err := chacha20poly1305.NewX(key[:])
+	if err != nil { return "", err }
+	dst, err := aead.Open(nil, nonce[:], ciphertext, nil)
+	if err != nil { return "", err }
 	result := string(dst)
 	return result, err
 }
-
-// TODO: maybe use XChaCha20-Poly1305?
 
 // internal
 

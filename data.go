@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/binary"
-	"errors"
 	"time"
 )
 
@@ -17,14 +16,7 @@ type EncryptedEntry struct {
 }
 
 func (e *EncryptedEntry) Decrypt(password string) (string, error) {
-	nonce := []byte{}
-	nonce = append(nonce, e.NoncePfx[:]...)
-	nonce = binary.BigEndian.AppendUint64(nonce, e.Timestamp)
-	if len(nonce) != 24 { return "", errors.New(ErrMsgInvalidNonceLen) }
-	txt, err := DecryptText(password, e.EncryptedText, e.Salt, [24]byte(nonce))
-	if err != nil {
-		return "", err
-	}
+	txt, err := DecryptText(password, e.EncryptedText, e.Salt, e.NoncePfx, e.Timestamp)
 	return txt, err
 }
 
