@@ -10,7 +10,7 @@ const ErrMsgInvalidNonceLen = "Assembled nonce has an invalid length!"
 
 type EncryptedEntry struct {
 	Timestamp uint64  // Unix time in s
-	Deleted bool
+	Hidden bool
 	Salt [12]byte
 	NoncePfx [16]byte // Nonce = random 16 bytes prefix + 8 byte timestamp
 	EncryptedText []byte
@@ -35,7 +35,7 @@ func (e *EncryptedEntry) EtLength() uint32 {
 func NewEncryptedEntry(text string, password string) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
 	e.Timestamp = uint64(time.Now().Unix())
-	e.Deleted = false
+	e.Hidden = false
 	ct, s, n, err := EncryptText(password, text, e.Timestamp)
 	if err != nil {
 		return &e, err
@@ -69,11 +69,11 @@ func DeserializeEntries(data []byte) []*EncryptedEntry {
 
 type encodedEntry struct {
 	// all integers are ordered big-endian
-	Timestamp [8]byte	//  0- 7   uint64
-	Deleted byte		//  8      0 = false, > 0 = true
-	Salt [12]byte		//  9-20
-	NoncePfx [16]byte	// 21-36
-	CtLength [4]byte	// 37-40
+	Timestamp [8]byte   //  0- 7   uint64
+	Hidden byte         //  8      0 = false, > 0 = true
+	Salt [12]byte       //  9-20
+	NoncePfx [16]byte   // 21-36
+	CtLength [4]byte    // 37-40
 	CipherText []byte   // 41-...  utf-8-encoded, encrypted
 }
 
@@ -84,7 +84,7 @@ func encodeEntry(e *EncryptedEntry) *encodedEntry {
 	// timestamp
 	binary.BigEndian.PutUint64(ee.Timestamp[:], e.Timestamp)
 	// deleted flag
-	if e.Deleted { ee.Deleted = 1 } else { ee.Deleted = 0 }
+	if e.Hidden { ee.Hidden = 1 } else { ee.Hidden = 0 }
 	// encrypt
 	ee.CipherText = e.EncryptedText
 	ee.Salt = e.Salt
@@ -98,7 +98,7 @@ func encodeEntry(e *EncryptedEntry) *encodedEntry {
 func decodeEntry(ee *encodedEntry) *EncryptedEntry {
 	e := EncryptedEntry{}
 	e.Timestamp = binary.BigEndian.Uint64(ee.Timestamp[:])
-	e.Deleted = ee.Deleted > 0
+	e.Hidden = ee.Hidden > 0
 	e.Salt = ee.Salt
 	e.NoncePfx = ee.NoncePfx
 	e.EncryptedText = ee.CipherText
@@ -109,7 +109,7 @@ func serializeEncodedEntries(ees []*encodedEntry) []byte {
 	b := []byte{}
 	for _, ee := range ees {
 		b = append(b, ee.Timestamp[:]...)
-		b = append(b, ee.Deleted)
+		b = append(b, ee.Hidden)
 		b = append(b, ee.Salt[:]...)
 		b = append(b, ee.NoncePfx[:]...)
 		b = append(b, ee.CtLength[:]...)
@@ -126,7 +126,7 @@ func deserializeEncodedEntries(data []byte) []*encodedEntry {
 		if lenD < o + payloadStart { break } // no more valid data.
 		ee := encodedEntry{}
 		ee.Timestamp = [8]byte(data[o+0:o+8])
-		ee.Deleted = data[o+8]
+		ee.Hidden = data[o+8]
 		ee.Salt = [12]byte(data[o+9:o+21])
 		ee.NoncePfx = [16]byte(data[o+21:o+37])
 		ee.CtLength = [4]byte(data[o+37:o+payloadStart])
