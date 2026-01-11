@@ -5,43 +5,57 @@ import (
 	"time"
 )
 
-type Entry struct {
+type EncryptedEntry struct {
 	Timestamp uint64 // Unix time in s
 	Deleted bool
-	Text string
+	Salt [12]byte
+	Nonce [24]byte
+	EncryptedText []byte
 }
 
-func NewEntry(text string) *Entry {
-	e := Entry{}
+func (e *EncryptedEntry) Decrypt(password string) (string, error) {
+	txt, err := DecryptText(password, e.EncryptedText, e.Salt, e.Nonce)
+	if err != nil {
+		return "", err
+	}
+	return txt, err
+}
+
+func (e *EncryptedEntry) EtLength() uint32 {
+	return uint32(len(e.EncryptedText))
+}
+
+func NewEncryptedEntry(text string, password string) (*EncryptedEntry, error) {
+	e := EncryptedEntry{}
 	e.Timestamp = uint64(time.Now().Unix())
 	e.Deleted = false
-	e.Text = text
-	return &e
+	ct, s, n, err := EncryptText(password, text)
+	if err != nil {
+		return &e, err
+	}
+	e.EncryptedText = ct
+	e.Salt = s
+	e.Nonce = n
+	return &e, err
 }
 
-func SerializeAndEncryptEntries(es []*Entry, password string) ([]byte, error) {
+func SerializeEntries(es []*EncryptedEntry) []byte {
 	ees := []*encodedEntry{}
 	for _, e := range es {
-		ee, err := encodeEncryptEntry(e, password)
-		if err != nil {
-			return []byte{}, err
-		}
+		ee := encodeEntry(e)
 		ees = append(ees, ee)
 	}
-	return serializeEncodedEntries(ees), nil
+	return serializeEncodedEntries(ees)
 }
 
-func DeserializeAndDecryptEntries(data []byte, password string) ([]*Entry, error) {
+func DeserializeEntries(data []byte) []*EncryptedEntry {
 	ees := deserializeEncodedEntries(data)
-	es := []*Entry{}
+	es := []*EncryptedEntry{}
 	for _, ee := range ees {
-		e, err := decodeDecryptEntry(ee, password)
-		if err != nil {
-			return es, err
-		}
+		e := decodeEntry(ee)
 		es = append(es, e)
 	}
-	return es, nil
+	return es
 }
 
 // very internal
@@ -58,38 +72,30 @@ type encodedEntry struct {
 
 const payloadStart = 49
 
-func encodeEncryptEntry(e *Entry, password string) (*encodedEntry, error) {
+func encodeEntry(e *EncryptedEntry) *encodedEntry {
 	ee := encodedEntry{}
 	// timestamp
 	binary.BigEndian.PutUint64(ee.Timestamp[:], e.Timestamp)
 	// deleted flag
 	if e.Deleted { ee.Deleted = 1 } else { ee.Deleted = 0 }
 	// encrypt
-	var err error = nil
-	ct, s, n, err := EncryptText(password, e.Text)
-	if err != nil {
-		return &ee, err
-	}
-	ee.CipherText = ct
-	ee.Salt = s
-	ee.Nonce = n
+	ee.CipherText = e.EncryptedText
+	ee.Salt = e.Salt
+	ee.Nonce = e.Nonce
 	// length
-	binary.BigEndian.PutUint32(ee.CtLength[:], uint32(len(ee.CipherText)))
+	binary.BigEndian.PutUint32(ee.CtLength[:], e.EtLength())
 	// done
-	return &ee, err
+	return &ee
 }
 
-func decodeDecryptEntry(ee *encodedEntry, password string) (*Entry, error) {
-	e := Entry{}
+func decodeEntry(ee *encodedEntry) *EncryptedEntry {
+	e := EncryptedEntry{}
 	e.Timestamp = binary.BigEndian.Uint64(ee.Timestamp[:])
 	e.Deleted = ee.Deleted > 0
-	// TODO: decrypt
-	txt, err := DecryptText(password, ee.CipherText, ee.Salt, ee.Nonce)
-	if err != nil {
-		return &e, err
-	}
-	e.Text = txt
-	return &e, err
+	e.Salt = ee.Salt
+	e.Nonce = ee.Nonce
+	e.EncryptedText = ee.CipherText
+	return &e
 }
 
 func serializeEncodedEntries(ees []*encodedEntry) []byte {

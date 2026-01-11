@@ -7,22 +7,30 @@ import (
 
 // import "os"
 
+func HandleErrorExit(err error) {
+	if err != nil {
+		fmt.Println(err);
+		os.Exit(1)
+	}
+}
+
 func main() {
 	// Cli(os.Args)
-	entries := []*Entry{}
-	entries = append(entries, NewEntry("aaaaaaa"))
-	entries = append(entries, NewEntry("bbbbb"))
-	for _, e := range entries { fmt.Println(*e) }
-	data, err := SerializeAndEncryptEntries(entries, "test password")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	pass := "test password"
+	entries := []*EncryptedEntry{}
+	e, err := NewEncryptedEntry("aaaaaaa", pass); HandleErrorExit(err);
+	entries = append(entries, e)
+	e2, err := NewEncryptedEntry("bcdefghij", pass); HandleErrorExit(err);
+	entries = append(entries, e2)
+	for _, e := range entries {
+		t, err := e.Decrypt(pass); HandleErrorExit(err);
+		fmt.Println(t)
 	}
+	data := SerializeEntries(entries)
 	fmt.Println(data)
-	entries_rese, err := DeserializeAndDecryptEntries(data, "test password")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	entries_rese := DeserializeEntries(data)
+	for _, e := range entries_rese {
+		t, err := e.Decrypt(pass); HandleErrorExit(err);
+		fmt.Println(t)
 	}
-	for _, e := range entries_rese { fmt.Println(*e) }
 }
