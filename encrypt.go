@@ -9,6 +9,8 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
+const ErrMsgInvalidNonceLen = "Assembled nonce has an invalid length!"
+
 func EncryptText(password string, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
 	salt := [12]byte{}
 	_, err := rand.Read(salt[:])
