@@ -31,24 +31,23 @@ type JournalFile struct {
 	Readonly bool
 	Filepath string
 	entries map[uint64]EncryptedEntry
-	need_read bool
-	need_write bool
+	needWrite bool
 	closed bool
 }
 
-func (j *JournalFile) GetEntries() []*EncryptedEntry {
-	if j.closed { return []*EncryptedEntry{} }
-	es := []*EncryptedEntry{}
-	for _, e := range j.entries {
-		es = append(es, &e)
+func (j *JournalFile) GetEntries() []uint64 {
+	if j.closed { return []uint64{} }
+	es := []uint64{}
+	for ts := range j.entries {
+		es = append(es, ts)
 	}
 	return es
 }
 
 func (j *JournalFile) GetEntry(ts uint64) *EncryptedEntry {
 	if j.closed { return nil }
-	j.Read()
-	e := j.entries[ts]
+	e, found := j.entries[ts]
+	if !found { return nil }
 	return &e
 }
 
@@ -58,7 +57,7 @@ func (j *JournalFile) AddEntry(e *EncryptedEntry) error {
 		return errors.New(EntryIdAlreadyExistsMsg)
 	}
 	j.entries[e.Timestamp] = *e
-	j.need_write = true
+	j.needWrite = true
 	return nil
 }
 
@@ -67,36 +66,33 @@ func (j *JournalFile) HideEntry(ts uint64) error {
 	if _, exists := j.entries[ts]; !exists {
 		return errors.New(EntryIdAlreadyExistsMsg)
 	}
-	j.need_write = true
+	j.needWrite = true
 	return nil
 }
 
 func (j *JournalFile) DeleteEntry(ts uint64) error {
 	if j.closed { return errors.New(JournalClosedMsg) }
 	delete(j.entries, ts)
-	j.need_write = true
+	j.needWrite = true
 	return nil
 }
 
-func (j *JournalFile) Read() error {
+func (j *JournalFile) read() error {
 	if j.closed { return errors.New(JournalClosedMsg) }
-	// read from file, if j.need_read (only at start)
-	if j.need_read {
-		f, err := os.OpenFile(j.Filepath, os.O_RDONLY, JournalFileMode)
-		if err != nil { return err }
-		data, err := io.ReadAll(f)
-		j.Version = data[0]
-		// Check if version is supported
-		if j.Version != JournalVersion {
-			return errors.New(UnsupportedJournalVersionMsg)
-		}
-		// read entries
-		j.entries = map[uint64]EncryptedEntry{}
-		es := DeserializeEntries(data[JournalPos_Entries:])
-		for _, e := range es {
-			j.entries[e.Timestamp] = *e
-		}
-		j.need_read = false
+	// read from file (only at start or manually)
+	f, err := os.OpenFile(j.Filepath, os.O_RDONLY, JournalFileMode)
+	if err != nil { return err }
+	data, err := io.ReadAll(f)
+	j.Version = data[0]
+	// Check if version is supported
+	if j.Version != JournalVersion {
+		return errors.New(UnsupportedJournalVersionMsg)
+	}
+	// read entries
+	j.entries = map[uint64]EncryptedEntry{}
+	es := DeserializeEntries(data[JournalPos_Entries:])
+	for _, e := range es {
+		j.entries[e.Timestamp] = *e
 	}
 	return nil
 }
@@ -104,7 +100,7 @@ func (j *JournalFile) Read() error {
 func (j *JournalFile) Write() error {
 	if j.closed { return errors.New(JournalClosedMsg) }
 	// write to file, if j.need_write
-	if j.need_write && !j.Readonly {
+	if j.needWrite && !j.Readonly {
 		// write to temporary file first, to prevent corrupted files
 		tmp := fmt.Sprintf("%s.tmp_%v", j.Filepath, time.Now().UnixMicro())
 		fTmp, err := os.OpenFile(tmp, os.O_WRONLY | os.O_CREATE, JournalFileMode)
@@ -123,7 +119,7 @@ func (j *JournalFile) Write() error {
 		if err != nil { return err }
 		// move temporary file to real file
 		err = os.Rename(tmp, j.Filepath)
-		j.need_write = false
+		j.needWrite = false
 	}
 	return nil
 }
@@ -155,6 +151,7 @@ func (j *JournalFile) Unlock() error {
 }
 
 func (j *JournalFile) Close() error {
+	j.Write()
 	err := j.Unlock()
 	j.closed = true
 	return err
@@ -174,16 +171,13 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 		} else if fileinfo.IsDir() {
 			return &j, errors.New(FilepathIsDirectoryMsg)
 		}
-		// read
-		j.need_read = true
 		err = j.Lock(); if err != nil { return &j, err }
-		err = j.Read(); if err != nil { return &j, err }
+		err = j.read(); if err != nil { return &j, err }
 	} else {
 		// init
 		j.Version = JournalVersion
 		j.entries = map[uint64]EncryptedEntry{}
-		j.need_read = false
-		j.need_write = true
+		j.needWrite = true
 		err = j.Write()
 		if err != nil { return &j, err }
 		err = j.Lock()

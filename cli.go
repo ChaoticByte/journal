@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,6 +87,7 @@ func AE(suffix string, codes ...string) string {
 
 // Screen & erase
 
+const A_ERASE_SCROLLBACK = "\u001b[2J\u001bc" // different methods in one
 const A_ERASE_SCREEN = "\u001b[2J"
 const A_ERASE_REST_OF_LINE = "\u001b[0K"
 const A_ERASE_LINE = "\u001b[2K"
@@ -139,12 +142,58 @@ func Nnl(n int) {
 	}
 }
 
-func MultipleChoice(choices [][2]string) int {
-	// accepts a list of choices, each is a short keyword and the actual choice
+func MultiPrompt(choices []string, hiddenChoices[]string) int {
 	// returns the index.
+	// hidden choices return (-1)-i
+
+	// i dont like this
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		if j != nil { j.Close() }
+		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+		os.Exit(0)
+	}()
+
 	Nl()
 	defer Nl()
-	// returns the key
+	for _, c := range choices { Out("  ", c); Nl() }; Nl()
+	Out("> ", A_SAVE_CUR_POS)
+	for {
+		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
+		var a string
+		fmt.Scanln(&a)
+		for i, c := range choices {
+			if c == a {
+				return i
+			}
+		}
+		for i, c := range hiddenChoices {
+			if c == a {
+				return -1 - i
+			}
+		}
+	}
+}
+
+func AdvancedMultipleChoice(choices [][2]string, hiddenChoices[]string) int {
+	// accepts a list of choices, each is a short keyword and the actual choice
+	// returns the index.
+
+	// i dont like this
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		if j != nil { j.Close() }
+		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+		os.Exit(0)
+	}()
+
+	//
+	Nl()
+	defer Nl()
 	for _, c := range choices {
 		fmt.Printf("  %s) %s\n", c[0], c[1])
 	}
@@ -159,6 +208,11 @@ func MultipleChoice(choices [][2]string) int {
 				return i
 			}
 		}
+		for i, c := range hiddenChoices {
+			if c == a {
+				return -1 - i
+			}
+		}
 	}
 }
 
@@ -166,9 +220,10 @@ func ReadPass() ([]byte, error) {
 	Nl()
 	Out("[ ] ")
 	Out(A_SAVE_CUR_POS)
+
 	// term.ReadPassword is very clever by not handling
 	// sigints correctly (at least in go version 1.25.5),
-	// so here we are with a very pleasant (not) workarout
+	// so here we are with a another very pleasant (not) workarout
 	fd := int(os.Stdout.Fd())
 	s, err := term.GetState(fd); if err != nil { return []byte{}, err }
 	c := make(chan os.Signal, 1)
@@ -180,6 +235,7 @@ func ReadPass() ([]byte, error) {
 		os.Exit(0)
 	}()
 	defer term.Restore(fd, s) // doppelt hält besser
+
 	// my god.
 	for {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
@@ -193,20 +249,135 @@ func ReadPass() ([]byte, error) {
 
 //
 
-func mainloop(j *JournalFile) {
+const (
+	UiMainloopCtxListYears = iota
+	UiMainloopCtxListMonths
+	UiMainloopCtxListEntries
+	UiMainloopCtxShowEntry
+)
+
+const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
+
+func mainloop(passwd []byte) {
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
-	defer Out(A_ERASE_SCREEN, A_CUR_HOME)
-	// just for fun
+	defer Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+
+	// just for fun ;)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		Out(A_ERASE_SCREEN, A_CUR_HOME)
+		j.Close()
+		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
 		os.Exit(0)
 	}()
 	// :)
+
 	// ok.
-	fmt.Scanln()
+	// let's start.
+	// pls.
+	mode := -1
+	selYear := -1
+	selMonth := ""
+	var selEntry uint64 = 0
+	//
+	for {
+		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME); Nl()
+		switch mode {
+		case UiMainloopCtxListYears:
+			years := []int{}
+			choices := []string{}
+			es := j.GetEntries()
+			slices.Sort(es)
+			for _, ts := range es {
+				year := time.UnixMicro(int64(ts)).Local().Year()
+				if !slices.Contains(years, year) {
+					years = append(years, year)
+					choices = append(choices, strconv.Itoa(year))
+				}
+			}
+			Out("Please select a year."); Nl()
+			sel := MultiPrompt(choices, []string{"exit", "quit", "q"})
+			if sel < 0 { return } // exit
+			selYear = years[sel]
+			mode = UiMainloopCtxListMonths
+		case UiMainloopCtxListMonths:
+			months := []string{}
+			choices := [][2]string{}
+			i := 0
+			es := j.GetEntries()
+			slices.Sort(es)
+			for _, ts := range es {
+				year := time.UnixMicro(int64(ts)).Local().Year()
+				if year == selYear {
+					month := time.UnixMicro(int64(ts)).Local().Month().String()
+					if !slices.Contains(months, month) {
+						months = append(months, month)
+						choices = append(choices, [2]string{strconv.Itoa(i+1), month})
+						i += 1
+					}
+				}
+			}
+			Out("Please select a month."); Nl()
+			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
+			if sel == -1 {
+				mode = UiMainloopCtxListYears
+			} else if sel < -1 {
+				return // exit
+			} else {
+				selMonth = months[sel]
+				mode = UiMainloopCtxListEntries
+			}
+		case UiMainloopCtxListEntries:
+			entries := []uint64{}
+			choices := [][2]string{}
+			es := j.GetEntries()
+			slices.Sort(es)
+			i := 0
+			for _, ts := range es {
+				year := time.UnixMicro(int64(ts)).Local().Year()
+				month := time.UnixMicro(int64(ts)).Local().Month().String()
+				if year == selYear && month == selMonth {
+					if !slices.Contains(entries, ts) {
+						entries = append(entries, ts)
+						choices = append(choices, [2]string{strconv.Itoa(i+1), time.UnixMicro(int64(ts)).Format(EntryTimeFormat)})
+						i += 1
+					}
+				}
+			}
+			Out("Please select an entry."); Nl()
+			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
+			if sel == -1 {
+				mode = UiMainloopCtxListMonths
+			} else if sel < -1 {
+				return // exit
+			} else {
+				selEntry = entries[sel]
+				mode = UiMainloopCtxShowEntry
+			}
+		case UiMainloopCtxShowEntry:
+			e := j.GetEntry(selEntry)
+			if e != nil {
+				Out("[Decrypting ...] ")
+				decr, err := e.Decrypt(passwd)
+				Out("\r", A_ERASE_LINE)
+				if err != nil {
+					Out("Entry could not be decrypted!")
+					Out("Either the password is wrong or the entry is corrupted.")
+				} else {
+					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat))
+					Out(decr)
+				}
+			} else {
+				Out("Entry not found!")
+			}
+			Nnl(2)
+			Out("[Press ENTER to back]"); fmt.Scanln()
+			mode = UiMainloopCtxListEntries
+		default:
+			mode = UiMainloopCtxListYears
+		}
+	}
 }
 
 func ShowUsageAndExit(a0 string, code int) {
@@ -231,7 +402,7 @@ func CliEntrypoint(args []string) {
 
 	// read password
 	Out("Please enter your encryption key."); Nl()
-	_, err := ReadPass()
+	passwd, err := ReadPass()
 	if err != nil {
 		Out("Couldn't get password from commandline safely."); Nl()
 		Out(err); Nl()
@@ -241,7 +412,7 @@ func CliEntrypoint(args []string) {
 	// try to open journal file
 	Out("Opening journal file at ", AE(A_SFX_MODE, A_SET_DIM), a1, AE(A_SFX_MODE, A_RES_DIM), " ...")
 	Nnl(2);
-	j, err := OpenJournalFile(a1)
+	j, err = OpenJournalFile(a1)
 	if err != nil { 
 		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "Couldn't open journal file!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nl()
 		Out(err); Nl()
@@ -249,16 +420,19 @@ func CliEntrypoint(args []string) {
 	if j.Readonly {
 		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "This journal is locked by another process!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nnl(2)
 		Out("Do you want to open it in Readonly-Mode or Read-Write-Mode (potentially dangerous)?"); Nl()
-		if c := MultipleChoice([][2]string{
-			{"ro", "readonly"},     // 0
-			{"rw", "read & write"},	// 1
-		}); c == 1 {
+		if c := AdvancedMultipleChoice(
+			[][2]string{
+				{"ro", "readonly"},		// 0
+				{"rw", "read & write"},	// 1
+			},
+			[]string{},
+		); c == 1 {
 			j.Readonly = false
-			Out("Program is in read-write mode. Be careful!")
+			Out("Program is in read-write mode. Be careful! ")
 			time.Sleep(4 * time.Second)
 			Nl()
 		} else {
-			Out("Program is in readonly mode.")
+			Out("Program is in readonly mode. ")
 			time.Sleep(2 * time.Second)
 			Nl()
 		}
@@ -266,6 +440,6 @@ func CliEntrypoint(args []string) {
 	if !j.Readonly { defer j.Close() }
 
 	// mainloop
-	mainloop(j)
+	mainloop(passwd)
 
 }
