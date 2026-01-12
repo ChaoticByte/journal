@@ -87,7 +87,7 @@ func AE(suffix string, codes ...string) string {
 
 // Screen & erase
 
-const A_ERASE_SCROLLBACK = "\u001b[2J\u001bc" // different methods in one
+const A_RESET = "\u001b[3J\u001bc" // at least one of them should work
 const A_ERASE_SCREEN = "\u001b[2J"
 const A_ERASE_REST_OF_LINE = "\u001b[0K"
 const A_ERASE_LINE = "\u001b[2K"
@@ -152,7 +152,7 @@ func MultiPrompt(choices []string, hiddenChoices[]string) int {
 	go func() {
 		<-c
 		if j != nil { j.Close() }
-		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+		Out(A_RESET, A_CUR_HOME)
 		os.Exit(0)
 	}()
 
@@ -187,7 +187,7 @@ func AdvancedMultipleChoice(choices [][2]string, hiddenChoices[]string) int {
 	go func() {
 		<-c
 		if j != nil { j.Close() }
-		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+		Out(A_RESET, A_CUR_HOME)
 		os.Exit(0)
 	}()
 
@@ -260,7 +260,7 @@ const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 
 func mainloop(passwd []byte) {
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
-	defer Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+	defer Out(A_RESET, A_CUR_HOME)
 
 	// just for fun ;)
 	c := make(chan os.Signal, 1)
@@ -268,7 +268,7 @@ func mainloop(passwd []byte) {
 	go func() {
 		<-c
 		j.Close()
-		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME)
+		Out(A_RESET, A_CUR_HOME)
 		os.Exit(0)
 	}()
 	// :)
@@ -282,7 +282,7 @@ func mainloop(passwd []byte) {
 	var selEntry uint64 = 0
 	//
 	for {
-		Out(A_ERASE_SCREEN, A_ERASE_SCROLLBACK, A_CUR_HOME); Nl()
+		Out(A_RESET, A_CUR_HOME); Nl()
 		switch mode {
 		case UiMainloopCtxListYears:
 			years := []int{}
@@ -365,7 +365,7 @@ func mainloop(passwd []byte) {
 					Out("Entry could not be decrypted!")
 					Out("Either the password is wrong or the entry is corrupted.")
 				} else {
-					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat))
+					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat)); Nnl(2)
 					Out(decr)
 				}
 			} else {
