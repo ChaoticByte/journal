@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -138,22 +139,25 @@ func Nnl(n int) {
 	}
 }
 
-func MultipleChoice(choices map[string]string) string {
+func MultipleChoice(choices [][2]string) int {
+	// accepts a list of choices, each is a short keyword and the actual choice
+	// returns the index.
 	Nl()
 	defer Nl()
 	// returns the key
-	for k, v := range choices {
-		fmt.Printf("  %s) %s\n", k, v) 
+	for _, c := range choices {
+		fmt.Printf("  %s) %s\n", c[0], c[1])
 	}
 	Nl()
 	Out("> ", A_SAVE_CUR_POS)
 	for {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
-		var c string
-		fmt.Scanln(&c)
-		_, exists := choices[c]
-		if exists {
-			return c
+		var a string
+		fmt.Scanln(&a)
+		for i, c := range choices {
+			if c[0] == a {
+				return i
+			}
 		}
 	}
 }
@@ -172,6 +176,7 @@ func ReadPass() ([]byte, error) {
 	go func() {
 		<-c
 		term.Restore(fd, s)
+		Nl()
 		os.Exit(0)
 	}()
 	defer term.Restore(fd, s) // doppelt hält besser
@@ -242,16 +247,20 @@ func CliEntrypoint(args []string) {
 		Out(err); Nl()
 	}
 	if j.Readonly {
-		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "This journal is locked by another process!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nl()
+		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "This journal is locked by another process!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nnl(2)
 		Out("Do you want to open it in Readonly-Mode or Read-Write-Mode (potentially dangerous)?"); Nl()
-		if c := MultipleChoice(map[string]string{
-			"ro": "readonly",
-			"rw": "read & write",
-		}); c == "rw" {
-			Out("Program is in read-only mode. Maybe create a backup before changing anything."); Nl()
+		if c := MultipleChoice([][2]string{
+			{"ro", "readonly"},     // 0
+			{"rw", "read & write"},	// 1
+		}); c == 1 {
 			j.Readonly = false
+			Out("Program is in read-write mode. Be careful!")
+			time.Sleep(4 * time.Second)
+			Nl()
 		} else {
-			Out("Program is in read-only mode."); Nl()
+			Out("Program is in readonly mode.")
+			time.Sleep(2 * time.Second)
+			Nl()
 		}
 	}
 	if !j.Readonly { defer j.Close() }
