@@ -338,10 +338,12 @@ func mainloop(passwd []byte) {
 				year := time.UnixMicro(int64(ts)).Local().Year()
 				month := time.UnixMicro(int64(ts)).Local().Month().String()
 				if year == selYear && month == selMonth {
-					if !slices.Contains(entries, ts) {
-						entries = append(entries, ts)
-						choices = append(choices, [2]string{strconv.Itoa(i+1), time.UnixMicro(int64(ts)).Format(EntryTimeFormat)})
-						i += 1
+					if !j.GetEntry(ts).Hidden {
+						if !slices.Contains(entries, ts) {
+							entries = append(entries, ts)
+							choices = append(choices, [2]string{strconv.Itoa(i+1), time.UnixMicro(int64(ts)).Format(EntryTimeFormat)})
+							i += 1
+						}
 					}
 				}
 			}
