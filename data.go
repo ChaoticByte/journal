@@ -124,7 +124,7 @@ func (j *JournalFile) CheckIfExternallyModified() (modified bool, err error) {
 		return false, err
 	}
 	t := f.ModTime()
-	return t == j.statLastModTime, err
+	return t.Equal(j.statLastModTime), err
 }
 
 func (j *JournalFile) updateLastModifiedTime() error {
