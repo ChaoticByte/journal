@@ -9,30 +9,33 @@ import (
 	"time"
 )
 
-const EntryIdAlreadyExistsMsg = "There already exists an entry at this timestamp!"
-const EntryIdDoesNotExistMsg = "No entry exists at this timestamp!"
-const UnsupportedJournalVersionMsg = "Unsupported journal version!"
-const FilepathIsDirectoryMsg = "The given filepath points to a directory!"
-const JournalClosedMsg = "Journal already closed, can't access data."
-const UnknownFileReadErrMsg = "Unknown file read error"
 
-// App Version -> Journal Version
-// <1.0 -> 0
+var EntryIdAlreadyExists = errors.New("There already exists an entry at this timestamp!")
+var EntryIdDoesNotExist = errors.New("No entry exists at this timestamp!")
+var UnsupportedJournalVersion = errors.New("Unsupported journal version!")
+var FilepathIsDirectory = errors.New("The given filepath points to a directory!")
+var JournalClosed = errors.New("Journal already closed, can't access data.")
+var UnknownFileReadErr = errors.New("Unknown file read error")
+var FileModifiedExternally = errors.New("The file was modified by another process since last read/write!")
+
+
+// Journal Version -> App Version
+// 0 ->     < 1.0.0
+// 1 -> since 1.0.0
 const JournalVersion = uint8(0)
 
 const JournalFileMode = 0o644
 
 const JournalPos_Version = 0
-const JournalPos_Lock = 1
-const JournalPos_Entries = 2
+const JournalPos_Entries = 1
 
 type JournalFile struct {
 	Version uint8
-	Readonly bool
 	Filepath string
 	entries map[uint64]EncryptedEntry
 	needWrite bool
 	closed bool
+	statLastModTime time.Time
 }
 
 func (j *JournalFile) GetEntries() []uint64 {
@@ -52,9 +55,9 @@ func (j *JournalFile) GetEntry(ts uint64) *EncryptedEntry {
 }
 
 func (j *JournalFile) AddEntry(e *EncryptedEntry) error {
-	if j.closed { return errors.New(JournalClosedMsg) }
+	if j.closed { return JournalClosed }
 	if _, exists := j.entries[e.Timestamp]; exists {
-		return errors.New(EntryIdAlreadyExistsMsg)
+		return EntryIdAlreadyExists
 	}
 	j.entries[e.Timestamp] = *e
 	j.needWrite = true
@@ -62,53 +65,38 @@ func (j *JournalFile) AddEntry(e *EncryptedEntry) error {
 }
 
 func (j *JournalFile) HideEntry(ts uint64) error {
-	if j.closed { return errors.New(JournalClosedMsg) }
+	if j.closed { return JournalClosed }
 	if _, exists := j.entries[ts]; !exists {
-		return errors.New(EntryIdAlreadyExistsMsg)
+		return EntryIdAlreadyExists
 	}
 	j.needWrite = true
 	return nil
 }
 
 func (j *JournalFile) DeleteEntry(ts uint64) error {
-	if j.closed { return errors.New(JournalClosedMsg) }
+	if j.closed { return JournalClosed }
 	delete(j.entries, ts)
 	j.needWrite = true
 	return nil
 }
 
-func (j *JournalFile) read() error {
-	if j.closed { return errors.New(JournalClosedMsg) }
-	// read from file (only at start or manually)
-	f, err := os.OpenFile(j.Filepath, os.O_RDONLY, JournalFileMode)
-	if err != nil { return err }
-	data, err := io.ReadAll(f)
-	j.Version = data[0]
-	// Check if version is supported
-	if j.Version != JournalVersion {
-		return errors.New(UnsupportedJournalVersionMsg)
-	}
-	// read entries
-	j.entries = map[uint64]EncryptedEntry{}
-	es := DeserializeEntries(data[JournalPos_Entries:])
-	for _, e := range es {
-		j.entries[e.Timestamp] = *e
-	}
-	return nil
-}
-
 func (j *JournalFile) Write() error {
-	if j.closed { return errors.New(JournalClosedMsg) }
+	if j.closed { return JournalClosed }
+	// check if the file was modified since the last check
+	mod, err := j.CheckIfExternallyModified()
+	if err != nil {
+		return err
+	}
+	if mod {
+		return FileModifiedExternally
+	}
 	// write to file, if j.need_write
-	if j.needWrite && !j.Readonly {
+	if j.needWrite {
 		// write to temporary file first, to prevent corrupted files
 		tmp := fmt.Sprintf("%s.tmp_%v", j.Filepath, time.Now().UnixMicro())
 		fTmp, err := os.OpenFile(tmp, os.O_WRONLY | os.O_CREATE, JournalFileMode)
 		if err != nil { return err }
-		_, err = fTmp.Write([]byte{
-			j.Version,
-			1, // journal should be locked
-		})
+		_, err = fTmp.Write([]byte{j.Version})
 		if err != nil { return err }
 		es := []*EncryptedEntry{}
 		for _, v := range j.entries {
@@ -121,39 +109,51 @@ func (j *JournalFile) Write() error {
 		err = os.Rename(tmp, j.Filepath)
 		j.needWrite = false
 	}
+	err = j.updateLastModifiedTime()
+	return err
+}
+
+func (j *JournalFile) Close() {
+	j.Write()
+	j.closed = true
+}
+
+func (j *JournalFile) CheckIfExternallyModified() (modified bool, err error) {
+	f, err := os.Stat(j.Filepath)
+	if err != nil {
+		return false, err
+	}
+	t := f.ModTime()
+	return t == j.statLastModTime, err
+}
+
+func (j *JournalFile) updateLastModifiedTime() error {
+	f, err := os.Stat(j.Filepath)
+	if err != nil {
+		return err
+	}
+	j.statLastModTime = f.ModTime()
 	return nil
 }
 
-func (j *JournalFile) Lock() error {
-	if j.closed { return errors.New(JournalClosedMsg) }
-	// Lock file so another instance knows that it is opened here.
-	// Only call once or after Unlock()!
-	f, err := os.OpenFile(j.Filepath, os.O_RDWR, JournalFileMode)
+func (j *JournalFile) read() error {
+	if j.closed { return JournalClosed }
+	// read from file (only at start or manually)
+	f, err := os.OpenFile(j.Filepath, os.O_RDONLY, JournalFileMode)
 	if err != nil { return err }
-	data := make([]byte, 1)
-	_, err = f.ReadAt(data, JournalPos_Lock)
-	if err != nil { return err }
-	j.Readonly = data[0] > 0
-	if !j.Readonly {
-		data[0] = 1
-		_, err = f.WriteAt(data, JournalPos_Lock)
+	data, err := io.ReadAll(f)
+	j.Version = data[0]
+	// Check if version is supported
+	if j.Version != JournalVersion {
+		return UnsupportedJournalVersion
 	}
-	return err
-}
-
-func (j *JournalFile) Unlock() error {
-	if j.closed { return errors.New(JournalClosedMsg) }
-	f, err := os.OpenFile(j.Filepath, os.O_WRONLY, JournalFileMode)
-	if err != nil { return err }
-	data := []byte{0}
-	_, err = f.WriteAt(data, JournalPos_Lock)
-	return err
-}
-
-func (j *JournalFile) Close() error {
-	j.Write()
-	err := j.Unlock()
-	j.closed = true
+	// read entries
+	j.entries = map[uint64]EncryptedEntry{}
+	es := DeserializeEntries(data[JournalPos_Entries:])
+	for _, e := range es {
+		j.entries[e.Timestamp] = *e
+	}
+	err = j.updateLastModifiedTime()
 	return err
 }
 
@@ -167,11 +167,10 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 	if !doesNotExist {
 		if err != nil { return &j, err }
 		if fileinfo == nil {
-			return &j, errors.New(UnknownFileReadErrMsg)
+			return &j, UnknownFileReadErr
 		} else if fileinfo.IsDir() {
-			return &j, errors.New(FilepathIsDirectoryMsg)
+			return &j, FilepathIsDirectory
 		}
-		err = j.Lock(); if err != nil { return &j, err }
 		err = j.read(); if err != nil { return &j, err }
 	} else {
 		// init
@@ -180,9 +179,6 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 		j.needWrite = true
 		err = j.Write()
 		if err != nil { return &j, err }
-		err = j.Lock()
-		if err != nil { return &j, err }
-		j.Readonly = false
 	}
 	return &j, err
 }

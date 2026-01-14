@@ -372,7 +372,7 @@ func mainloop(passwd []byte) {
 				Out("Entry not found!")
 			}
 			Nnl(2)
-			Out("[Press ENTER to back]"); fmt.Scanln()
+			Out("[Press ENTER to go back]"); fmt.Scanln()
 			mode = UiMainloopCtxListEntries
 		default:
 			mode = UiMainloopCtxListYears
@@ -417,27 +417,7 @@ func CliEntrypoint(args []string) {
 		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "Couldn't open journal file!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nl()
 		Out(err); Nl()
 	}
-	if j.Readonly {
-		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "This journal is locked by another process!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nnl(2)
-		Out("Do you want to open it in Readonly-Mode or Read-Write-Mode (potentially dangerous)?"); Nl()
-		if c := AdvancedMultipleChoice(
-			[][2]string{
-				{"ro", "readonly"},		// 0
-				{"rw", "read & write"},	// 1
-			},
-			[]string{},
-		); c == 1 {
-			j.Readonly = false
-			Out("Program is in read-write mode. Be careful! ")
-			time.Sleep(4 * time.Second)
-			Nl()
-		} else {
-			Out("Program is in readonly mode. ")
-			time.Sleep(2 * time.Second)
-			Nl()
-		}
-	}
-	if !j.Readonly { defer j.Close() }
+	defer j.Close()
 
 	// mainloop
 	mainloop(passwd)
