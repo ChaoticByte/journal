@@ -84,9 +84,7 @@ func (j *JournalFile) Write() error {
 	if j.closed { return JournalClosed }
 	// check if the file was modified since the last check
 	mod, err := j.CheckIfExternallyModified()
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	if mod {
 		return FileModifiedExternally
 	}
@@ -120,18 +118,14 @@ func (j *JournalFile) Close() {
 
 func (j *JournalFile) CheckIfExternallyModified() (modified bool, err error) {
 	f, err := os.Stat(j.Filepath)
-	if err != nil {
-		return false, err
-	}
+	if err != nil { return false, err }
 	t := f.ModTime()
-	return t.Equal(j.statLastModTime), err
+	return !j.statLastModTime.Equal(t), err
 }
 
 func (j *JournalFile) updateLastModifiedTime() error {
 	f, err := os.Stat(j.Filepath)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	j.statLastModTime = f.ModTime()
 	return nil
 }

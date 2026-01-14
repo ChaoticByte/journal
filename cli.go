@@ -254,11 +254,12 @@ const (
 	UiMainloopCtxListMonths
 	UiMainloopCtxListEntries
 	UiMainloopCtxShowEntry
+	UiMainloopCtxNewEntry
 )
 
 const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 
-func mainloop(passwd []byte) {
+func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
 	defer Out(A_RESET, A_CUR_HOME)
 
@@ -276,6 +277,7 @@ func mainloop(passwd []byte) {
 	// ok.
 	// let's start.
 	// pls.
+	lastMode := -1
 	mode := -1
 	selYear := -1
 	selMonth := ""
@@ -296,9 +298,15 @@ func mainloop(passwd []byte) {
 					choices = append(choices, strconv.Itoa(year))
 				}
 			}
+			lastMode = mode
 			Out("Please select a year."); Nl()
-			sel := MultiPrompt(choices, []string{"exit", "quit", "q"})
-			if sel < 0 { return } // exit
+			sel := MultiPrompt(choices, []string{"new", "exit", "quit", "q"})
+			if sel == -1 {
+				mode = UiMainloopCtxNewEntry
+				continue
+			} else if sel < -1 {
+				return 0 // exit
+			}
 			selYear = years[sel]
 			mode = UiMainloopCtxListMonths
 		case UiMainloopCtxListMonths:
@@ -318,12 +326,13 @@ func mainloop(passwd []byte) {
 					}
 				}
 			}
+			lastMode = mode
 			Out("Please select a month."); Nl()
 			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
 			if sel == -1 {
 				mode = UiMainloopCtxListYears
 			} else if sel < -1 {
-				return // exit
+				return 0 // exit
 			} else {
 				selMonth = months[sel]
 				mode = UiMainloopCtxListEntries
@@ -349,10 +358,11 @@ func mainloop(passwd []byte) {
 			}
 			Out("Please select an entry."); Nl()
 			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
+			lastMode = mode
 			if sel == -1 {
 				mode = UiMainloopCtxListMonths
 			} else if sel < -1 {
-				return // exit
+				return 0 // exit
 			} else {
 				selEntry = entries[sel]
 				mode = UiMainloopCtxShowEntry
@@ -375,7 +385,52 @@ func mainloop(passwd []byte) {
 			}
 			Nnl(2)
 			Out("[Press ENTER to go back]"); fmt.Scanln()
+			lastMode = mode
 			mode = UiMainloopCtxListEntries
+		case UiMainloopCtxNewEntry:
+			eTxt, err := GetTextFromEditor(editorCmd, "")
+			handleErr := func(err error, out ...any) {
+				Out(out...); Nl()
+				Out(err.Error()); Nnl(2)
+				Out("[Press ENTER to go back]"); fmt.Scanln()
+				mode = lastMode
+			}
+			if err != nil {
+				handleErr(err, "Error creating new entry with editor ", editorName)
+				continue
+			}
+			e, err := NewEncryptedEntry(eTxt, passwd)
+			if err != nil {
+				handleErr(err, "Error creating new entry")
+				continue
+			}
+			err = j.AddEntry(e)
+			if err != nil {
+				handleErr(err, "Error adding new entry to journal")
+				continue
+			}
+			err = j.Write()
+			if err == FileModifiedExternally {
+				Out("The file was modified by another program since the last read/write."); Nnl(2)
+				Out("[Press enter when you are ready to overwrite the journal file]"); fmt.Scanln()
+				err = j.updateLastModifiedTime()
+				if err != nil {
+					Out("Couldn't overwrite file. aborting."); Nnl(2)
+					Out("[Press Enter to exit program]"); fmt.Scanln()
+					return 1
+				}
+				err = j.Write()
+				if err != nil {
+					Out("Couldn't overwrite file. aborting."); Nnl(2)
+					Out("[Press Enter to exit program]"); fmt.Scanln()
+					return 1
+				}
+			} else if err != nil {
+				Out("Couldn't write journal file. aborting."); Nnl(2)
+				Out("[Press Enter to exit program]"); fmt.Scanln()
+			}
+			mode = UiMainloopCtxShowEntry
+			selEntry = e.Timestamp
 		default:
 			mode = UiMainloopCtxListYears
 		}
@@ -389,7 +444,12 @@ func ShowUsageAndExit(a0 string, code int) {
 	os.Exit(code)
 }
 
-func CliEntrypoint(args []string) {
+func CliEntrypoint() {
+	args := os.Args
+	editor := os.Getenv("JOURNAL_EDITOR")
+	if editor == "" { editor = "nano" }
+	if _, exists := Editors[editor]; !exists { editor = "nano" }
+	editorCmd := Editors[editor]
 	// parse cli args
 	if len(args) < 2 {
 		ShowUsageAndExit(args[0], 1)
@@ -422,6 +482,6 @@ func CliEntrypoint(args []string) {
 	defer j.Close()
 
 	// mainloop
-	mainloop(passwd)
+	os.Exit(mainloop(passwd, editorCmd, editor))
 
 }
