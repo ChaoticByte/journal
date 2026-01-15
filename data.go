@@ -71,18 +71,6 @@ func (j *JournalFile) DeleteEntry(ts uint64) error {
 	return nil
 }
 
-func (j *JournalFile) UpdateEntryText(ts uint64, newText string, pass []byte) error {
-	if j.closed { return JournalClosed }
-	e := j.GetEntry(ts)
-	if e == nil { return EntryNotFound }
-	ct, s, n, err := EncryptText(pass, newText, e.Timestamp)
-	if err != nil { return err }
-	e.EncryptedText = ct
-	e.Salt = s
-	e.NoncePfx = n
-	return err
-}
-
 func (j *JournalFile) Write() error {
 	if j.closed { return JournalClosed }
 	// check if the file was modified since the last check

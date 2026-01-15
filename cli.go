@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"slices"
@@ -142,6 +144,15 @@ func Nnl(n int) {
 	}
 }
 
+func Readline() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	s, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return s[:len(s)-1], err
+}
+
 func MultiPrompt(choices []string, hiddenChoices[]string) int {
 	// returns the index.
 	// hidden choices return (-1)-i
@@ -162,8 +173,7 @@ func MultiPrompt(choices []string, hiddenChoices[]string) int {
 	Out("> ", A_SAVE_CUR_POS)
 	for {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
-		var a string
-		fmt.Scanln(&a)
+		a, _ := Readline()
 		for i, c := range choices {
 			if c == a {
 				return i
@@ -177,7 +187,7 @@ func MultiPrompt(choices []string, hiddenChoices[]string) int {
 	}
 }
 
-func AdvancedMultipleChoice(choices [][2]string, hiddenChoices[]string) int {
+func AdvancedMultiPrompt(choices [][2]string, hiddenChoices[]string) int {
 	// accepts a list of choices, each is a short keyword and the actual choice
 	// returns the index.
 
@@ -201,8 +211,7 @@ func AdvancedMultipleChoice(choices [][2]string, hiddenChoices[]string) int {
 	Out("> ", A_SAVE_CUR_POS)
 	for {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
-		var a string
-		fmt.Scanln(&a)
+		a, _ := Readline()
 		for i, c := range choices {
 			if c[0] == a {
 				return i
@@ -254,12 +263,12 @@ const (
 	UiMainloopCtxListMonths
 	UiMainloopCtxListEntries
 	UiMainloopCtxShowEntry
-	UiMainloopCtxNewEntry
+	UiMainloopCtxEditEntry
 )
 
 const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 
-func mainloop(passwd []byte, editorCmd []string, editorName string) int {
+func mainloop(passwd []byte) int {
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
 	defer Out(A_RESET, A_CUR_HOME)
 
@@ -302,7 +311,7 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 			Out("Please select a year."); Nl()
 			sel := MultiPrompt(choices, []string{"new", "exit", "quit", "q"})
 			if sel == -1 {
-				mode = UiMainloopCtxNewEntry
+				mode = UiMainloopCtxEditEntry
 				continue
 			} else if sel < -1 {
 				return 0 // exit
@@ -328,10 +337,12 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 			}
 			lastMode = mode
 			Out("Please select a month."); Nl()
-			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
+			sel := AdvancedMultiPrompt(choices, []string{"", "new", "exit", "quit", "q"})
 			if sel == -1 {
 				mode = UiMainloopCtxListYears
-			} else if sel < -1 {
+			} else if sel == -2 {
+				mode = UiMainloopCtxEditEntry
+			} else if sel < -2 {
 				return 0 // exit
 			} else {
 				selMonth = months[sel]
@@ -355,11 +366,13 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 				}
 			}
 			Out("Please select an entry."); Nl()
-			sel := AdvancedMultipleChoice(choices, []string{"", "exit", "quit", "q"})
+			sel := AdvancedMultiPrompt(choices, []string{"", "new", "exit", "quit", "q"})
 			lastMode = mode
 			if sel == -1 {
 				mode = UiMainloopCtxListMonths
-			} else if sel < -1 {
+			} else if sel == -2 {
+				mode = UiMainloopCtxEditEntry
+			} else if sel < -2 {
 				return 0 // exit
 			} else {
 				selEntry = entries[sel]
@@ -369,34 +382,40 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 			e := j.GetEntry(selEntry)
 			if e != nil {
 				Out("[Decrypting ...] ")
-				decr, err := e.Decrypt(passwd)
+				txt, err := e.Decrypt(passwd)
 				Out("\r", A_ERASE_LINE)
 				if err != nil {
 					Out("Entry could not be decrypted!")
 					Out("Either the password is wrong or the entry is corrupted.")
 				} else {
 					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat)); Nnl(2)
-					Out(decr)
+					Out(txt); Nnl(2)
 				}
 			} else {
-				Out("Entry not found!")
+				Out("Entry not found!"); Nnl(2)
+				Out("[Press ENTER to go back]"); Readline()
+				mode = lastMode
+				continue
 			}
-			Nnl(2)
-			Out("[Press ENTER to go back]"); fmt.Scanln()
+			Out("> "); Readline()
 			mode = lastMode
-		case UiMainloopCtxNewEntry:
-			eTxt, err := GetTextFromEditor(editorCmd, "")
+		case UiMainloopCtxEditEntry:
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
-				Out("[Press ENTER to go back]"); fmt.Scanln()
+				Out("[Press ENTER to go back]"); Readline()
 				mode = lastMode
 			}
-			if err != nil {
-				handleErr(err, "Error creating new entry with editor ", editorName)
-				continue
+			Out("Write your new entry. Will listen until END."); Nnl(2)
+			lines := []string{}
+			for {
+				Out("| ")
+				line, err := Readline()
+				if err == io.EOF { break }
+				if line == "END" { break }
+				lines = append(lines, line)
 			}
-			e, err := NewEncryptedEntry(eTxt, passwd)
+			e, err := NewEncryptedEntry(strings.Join(lines, "\n"), passwd)
 			if err != nil {
 				handleErr(err, "Error creating new entry")
 				continue
@@ -406,31 +425,31 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 				handleErr(err, "Error adding new entry to journal")
 				continue
 			}
+			selEntry = e.Timestamp
 			err = j.Write()
 			if err == FileModifiedExternally {
 				Out("The file was modified by another program since the last read/write."); Nnl(2)
-				Out("[Press enter when you are ready to overwrite the journal file]"); fmt.Scanln()
+				Out("[Press enter when you are ready to overwrite the journal file]"); Readline()
 				err = j.updateLastModifiedTime()
 				if err != nil {
 					Out("Couldn't overwrite file. aborting."); Nl()
 					Out(err); Nnl(2)
-					Out("[Press Enter to exit program]"); fmt.Scanln()
+					Out("[Press Enter to exit program]"); Readline()
 					return 1
 				}
 				err = j.Write()
 				if err != nil {
 					Out("Couldn't overwrite file. aborting."); Nl()
 					Out(err); Nnl(2)
-					Out("[Press Enter to exit program]"); fmt.Scanln()
+					Out("[Press Enter to exit program]"); Readline()
 					return 1
 				}
 			} else if err != nil {
 				Out("Couldn't write journal file. aborting."); Nl()
 				Out(err); Nnl(2)
-				Out("[Press Enter to exit program]"); fmt.Scanln()
+				Out("[Press Enter to exit program]"); Readline()
 			}
 			mode = UiMainloopCtxShowEntry
-			selEntry = e.Timestamp
 		default:
 			mode = UiMainloopCtxListYears
 		}
@@ -446,10 +465,6 @@ func ShowUsageAndExit(a0 string, code int) {
 
 func CliEntrypoint() {
 	args := os.Args
-	editor := os.Getenv("JOURNAL_EDITOR")
-	if editor == "" { editor = "nano" }
-	if _, exists := Editors[editor]; !exists { editor = "nano" }
-	editorCmd := Editors[editor]
 	// parse cli args
 	if len(args) < 2 {
 		ShowUsageAndExit(args[0], 1)
@@ -478,12 +493,12 @@ func CliEntrypoint() {
 	if err != nil { 
 		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "Couldn't open journal file!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nl()
 		Out(err); Nnl(2)
-		Out("[Press Enter to exit]"); fmt.Scanln()
+		Out("[Press Enter to exit]"); Readline()
 		os.Exit(1)
 	}
 	defer j.Close()
 
 	// mainloop
-	os.Exit(mainloop(passwd, editorCmd, editor))
+	os.Exit(mainloop(passwd))
 
 }
