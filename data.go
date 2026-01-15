@@ -11,7 +11,7 @@ import (
 
 
 var EntryIdAlreadyExists = errors.New("There already exists an entry at this timestamp!")
-var EntryIdDoesNotExist = errors.New("No entry exists at this timestamp!")
+var EntryNotFound = errors.New("No entry exists at this timestamp!")
 var UnsupportedJournalVersion = errors.New("Unsupported journal version!")
 var FilepathIsDirectory = errors.New("The given filepath points to a directory!")
 var JournalClosed = errors.New("Journal already closed, can't access data.")
@@ -64,15 +64,6 @@ func (j *JournalFile) AddEntry(e *EncryptedEntry) error {
 	return nil
 }
 
-func (j *JournalFile) HideEntry(ts uint64) error {
-	if j.closed { return JournalClosed }
-	if _, exists := j.entries[ts]; !exists {
-		return EntryIdAlreadyExists
-	}
-	j.needWrite = true
-	return nil
-}
-
 func (j *JournalFile) DeleteEntry(ts uint64) error {
 	if j.closed { return JournalClosed }
 	delete(j.entries, ts)
@@ -80,11 +71,27 @@ func (j *JournalFile) DeleteEntry(ts uint64) error {
 	return nil
 }
 
+func (j *JournalFile) UpdateEntryText(ts uint64, newText string, pass []byte) error {
+	if j.closed { return JournalClosed }
+	e := j.GetEntry(ts)
+	if e == nil { return EntryNotFound }
+	ct, s, n, err := EncryptText(pass, newText, e.Timestamp)
+	if err != nil { return err }
+	e.EncryptedText = ct
+	e.Salt = s
+	e.NoncePfx = n
+	return err
+}
+
 func (j *JournalFile) Write() error {
 	if j.closed { return JournalClosed }
 	// check if the file was modified since the last check
 	mod, err := j.CheckIfExternallyModified()
-	if err != nil { return err }
+	if err != nil { 
+		if !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if mod {
 		return FileModifiedExternally
 	}
@@ -157,8 +164,14 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 	j.Filepath = file
 	// check file
 	fileinfo, err := os.Stat(j.Filepath)
-	doesNotExist := os.IsNotExist(err)
-	if !doesNotExist {
+	if os.IsNotExist(err) {
+		// init
+		j.Version = JournalVersion
+		j.entries = map[uint64]EncryptedEntry{}
+		j.needWrite = true
+		err = j.Write()
+		if err != nil { return &j, err }
+	} else {
 		if err != nil { return &j, err }
 		if fileinfo == nil {
 			return &j, UnknownFileReadErr
@@ -166,13 +179,6 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 			return &j, FilepathIsDirectory
 		}
 		err = j.read(); if err != nil { return &j, err }
-	} else {
-		// init
-		j.Version = JournalVersion
-		j.entries = map[uint64]EncryptedEntry{}
-		j.needWrite = true
-		err = j.Write()
-		if err != nil { return &j, err }
 	}
 	return &j, err
 }
@@ -180,7 +186,6 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 
 type EncryptedEntry struct {
 	Timestamp uint64  // Unix time in microseconds, works until year 294246
-	Hidden bool
 	Salt [12]byte
 	NoncePfx [16]byte // Nonce = random 16 bytes prefix + 8 byte timestamp
 	EncryptedText []byte
@@ -198,7 +203,6 @@ func (e *EncryptedEntry) EtLength() uint32 {
 func NewEncryptedEntry(text string, password []byte) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
 	e.Timestamp = uint64(time.Now().UnixMicro())
-	e.Hidden = false
 	ct, s, n, err := EncryptText(password, text, e.Timestamp)
 	if err != nil {
 		return &e, err
@@ -233,21 +237,18 @@ func DeserializeEntries(data []byte) []*EncryptedEntry {
 type encodedEntry struct {
 	// all integers are ordered big-endian
 	Timestamp [8]byte   //  0- 7   uint64
-	Hidden byte         //  8      0 = false, > 0 = true
-	Salt [12]byte       //  9-20
-	NoncePfx [16]byte   // 21-36
-	CtLength [4]byte    // 37-40
-	CipherText []byte   // 41-...  utf-8-encoded, encrypted
+	Salt [12]byte       //  8-19
+	NoncePfx [16]byte   // 20-35
+	CtLength [4]byte    // 36-39
+	CipherText []byte   // 40-...  utf-8-encoded, encrypted
 }
 
-const payloadStart = 41
+const payloadStart = 40
 
 func encodeEntry(e *EncryptedEntry) *encodedEntry {
 	ee := encodedEntry{}
 	// timestamp
 	binary.BigEndian.PutUint64(ee.Timestamp[:], e.Timestamp)
-	// deleted flag
-	if e.Hidden { ee.Hidden = 1 } else { ee.Hidden = 0 }
 	// encrypt
 	ee.CipherText = e.EncryptedText
 	ee.Salt = e.Salt
@@ -261,7 +262,6 @@ func encodeEntry(e *EncryptedEntry) *encodedEntry {
 func decodeEntry(ee *encodedEntry) *EncryptedEntry {
 	e := EncryptedEntry{}
 	e.Timestamp = binary.BigEndian.Uint64(ee.Timestamp[:])
-	e.Hidden = ee.Hidden > 0
 	e.Salt = ee.Salt
 	e.NoncePfx = ee.NoncePfx
 	e.EncryptedText = ee.CipherText
@@ -272,7 +272,6 @@ func serializeEncodedEntries(ees []*encodedEntry) []byte {
 	b := []byte{}
 	for _, ee := range ees {
 		b = append(b, ee.Timestamp[:]...)
-		b = append(b, ee.Hidden)
 		b = append(b, ee.Salt[:]...)
 		b = append(b, ee.NoncePfx[:]...)
 		b = append(b, ee.CtLength[:]...)
@@ -289,10 +288,9 @@ func deserializeEncodedEntries(data []byte) []*encodedEntry {
 		if lenD < o + payloadStart { break } // no more valid data.
 		ee := encodedEntry{}
 		ee.Timestamp = [8]byte(data[o+0:o+8])
-		ee.Hidden = data[o+8]
-		ee.Salt = [12]byte(data[o+9:o+21])
-		ee.NoncePfx = [16]byte(data[o+21:o+37])
-		ee.CtLength = [4]byte(data[o+37:o+payloadStart])
+		ee.Salt = [12]byte(data[o+8:o+20])
+		ee.NoncePfx = [16]byte(data[o+20:o+36])
+		ee.CtLength = [4]byte(data[o+36:o+payloadStart])
 		ctLen := int(binary.BigEndian.Uint32(ee.CtLength[:]))
 		if lenD < o + payloadStart + ctLen { break } // no more valid data.
 		ee.CipherText = data[o+payloadStart:o+payloadStart+ctLen]

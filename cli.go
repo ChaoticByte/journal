@@ -347,12 +347,10 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 				year := time.UnixMicro(int64(ts)).Local().Year()
 				month := time.UnixMicro(int64(ts)).Local().Month().String()
 				if year == selYear && month == selMonth {
-					if !j.GetEntry(ts).Hidden {
-						if !slices.Contains(entries, ts) {
-							entries = append(entries, ts)
-							choices = append(choices, [2]string{strconv.Itoa(i+1), time.UnixMicro(int64(ts)).Format(EntryTimeFormat)})
-							i += 1
-						}
+					if !slices.Contains(entries, ts) {
+						entries = append(entries, ts)
+						choices = append(choices, [2]string{strconv.Itoa(i+1), time.UnixMicro(int64(ts)).Format(EntryTimeFormat)})
+						i += 1
 					}
 				}
 			}
@@ -385,8 +383,7 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 			}
 			Nnl(2)
 			Out("[Press ENTER to go back]"); fmt.Scanln()
-			lastMode = mode
-			mode = UiMainloopCtxListEntries
+			mode = lastMode
 		case UiMainloopCtxNewEntry:
 			eTxt, err := GetTextFromEditor(editorCmd, "")
 			handleErr := func(err error, out ...any) {
@@ -415,18 +412,21 @@ func mainloop(passwd []byte, editorCmd []string, editorName string) int {
 				Out("[Press enter when you are ready to overwrite the journal file]"); fmt.Scanln()
 				err = j.updateLastModifiedTime()
 				if err != nil {
-					Out("Couldn't overwrite file. aborting."); Nnl(2)
+					Out("Couldn't overwrite file. aborting."); Nl()
+					Out(err); Nnl(2)
 					Out("[Press Enter to exit program]"); fmt.Scanln()
 					return 1
 				}
 				err = j.Write()
 				if err != nil {
-					Out("Couldn't overwrite file. aborting."); Nnl(2)
+					Out("Couldn't overwrite file. aborting."); Nl()
+					Out(err); Nnl(2)
 					Out("[Press Enter to exit program]"); fmt.Scanln()
 					return 1
 				}
 			} else if err != nil {
-				Out("Couldn't write journal file. aborting."); Nnl(2)
+				Out("Couldn't write journal file. aborting."); Nl()
+				Out(err); Nnl(2)
 				Out("[Press Enter to exit program]"); fmt.Scanln()
 			}
 			mode = UiMainloopCtxShowEntry
@@ -477,7 +477,9 @@ func CliEntrypoint() {
 	j, err = OpenJournalFile(a1)
 	if err != nil { 
 		Out(AE(A_SFX_COLOR, A_COL_RED_FG), "Couldn't open journal file!", AE(A_SFX_COLOR, A_COL_RES_FG)); Nl()
-		Out(err); Nl()
+		Out(err); Nnl(2)
+		Out("[Press Enter to exit]"); fmt.Scanln()
+		os.Exit(1)
 	}
 	defer j.Close()
 
