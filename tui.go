@@ -14,9 +14,17 @@ import (
 	"golang.org/x/term"
 )
 
+/*
+
+This file includes stuff for the terminal user interface.
+Entrypoint() -> mainloop() -> ...
+
+*/
+
 // terminal helpers
 
 func Out(stuff ...any) {
+	// write stuff, without spaces between stuff1, stuff2, etc.
 	for _, s := range stuff {
 		fmt.Print(s)
 	}
@@ -25,12 +33,14 @@ func Out(stuff ...any) {
 func Nl() { Out("\n") }
 
 func Nnl(n int) {
+	// write n lines
 	for range n {
 		Out("\n")
 	}
 }
 
 func Readline() (string, error) {
+	// read a single line from stdin
 	reader := bufio.NewReader(os.Stdin)
 	s, err := reader.ReadString('\n')
 	if err != nil {
@@ -40,9 +50,10 @@ func Readline() (string, error) {
 }
 
 func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string, helpLine string) int {
+	// Get a multiple-choice answer or a command from the user.
 	// returns the index, (-1 - index) for commands
 
-	// i dont like this
+	// Handle SIGINT
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -54,8 +65,10 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 
 	defer Nl()
 
+	// output prompt, if any
 	if prompt != "" { Out(AColMode(A_SET_DIM), prompt, AColMode(A_RESET_DIM)); Nnl(2) }
 
+	// print choices, if any
 	if len(choices) > 0 {
 		Nl()
 		for _, c := range choices {
@@ -64,6 +77,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 		Nnl(2)
 	}
 
+	// output > and save cursor position
 	Out("> ", A_SAVE_CUR_POS)
 	if helpLine != "" {
 		Nnl(3)
@@ -73,6 +87,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	}
 
 	for {
+		// read lines until a valid choice or command is entered
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
 		a, _ := Readline()
 		for i, c := range choices {
@@ -89,13 +104,14 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 }
 
 func ReadPass() ([]byte, error) {
+	// Read a password using term.ReadPassword()
+	// with additional fancy workarounds and shit
+
 	Nl()
 	Out("[ ] ")
 	Out(A_SAVE_CUR_POS)
 
-	// term.ReadPassword is very clever by not handling
-	// sigints correctly (at least in go version 1.25.5),
-	// so here we are with a another very pleasant (not) workarout
+	// Handle SIGINT (+ manual cleanup of term.Readpassword)
 	fd := int(os.Stdout.Fd())
 	s, err := term.GetState(fd); if err != nil { return []byte{}, err }
 	c := make(chan os.Signal, 1)
@@ -108,7 +124,6 @@ func ReadPass() ([]byte, error) {
 	}()
 	defer term.Restore(fd, s) // doppelt hält besser
 
-	// my god.
 	for {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
 		pw, err := term.ReadPassword(fd); Nl()
@@ -126,16 +141,18 @@ const (
 	UiListMonths
 	UiListEntries
 	UiShowEntry
-	UiEditEntry
+	UiNewEntry
 )
 
 const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 
 func mainloop(passwd []byte) int {
+
+	// erase screen and reset screen on exit.
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
 	defer Out(A_RESET, A_CUR_HOME)
 
-	// just for fun ;)
+	// Handle SIGINT
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -146,13 +163,16 @@ func mainloop(passwd []byte) int {
 	}()
 	// :)
 
+	// ui mode
 	lastMode := -1
 	mode := -1
+	// selections
 	selYear := -1
 	selMonth := ""
-	selEntry := uint64(0)
+	selEntry := uint64(1) // entry 0 is reserved, so use as default.
 
 	getHelpLine := func() string {
+		// returns the help line for the current mode
 		cmds := []string{}
 		addCmd := func(cmd string, expl string) {
 			cmds = append(
@@ -170,8 +190,9 @@ func mainloop(passwd []byte) int {
 		return strings.Join(cmds, "  ")
 	}
 
-	//
-	for {
+	for { // the actual main loop
+
+		// reset screen and put cursor in the top left
 		Out(A_RESET, A_CUR_HOME); Nl()
 
 		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
@@ -184,6 +205,7 @@ func mainloop(passwd []byte) int {
 			months := []string{}
 			entries := []uint64{}
 
+			// collect list of choices based on filtered entries
 			es := j.GetEntries()
 			slices.Sort(es)
 			i := 0
@@ -245,12 +267,15 @@ func mainloop(passwd []byte) int {
 				prompt,
 				getHelpLine())
 
+			// prepare next iteration (or exit)
+			// based on user input
+
 			lastMode = mode
 
 			switch mode {
 			case UiListYears:
 				if sel == -1 {
-					mode = UiEditEntry
+					mode = UiNewEntry
 					continue
 				} else if sel < -1 {
 					return 0 // exit
@@ -261,7 +286,7 @@ func mainloop(passwd []byte) int {
 				if sel == -1 {
 					mode = UiListYears
 				} else if sel == -2 {
-					mode = UiEditEntry
+					mode = UiNewEntry
 				} else if sel < -2 {
 					return 0 // exit
 				} else {
@@ -272,7 +297,7 @@ func mainloop(passwd []byte) int {
 				if sel == -1 {
 					mode = UiListMonths
 				} else if sel == -2 {
-					mode = UiEditEntry
+					mode = UiNewEntry
 				} else if sel < -2 {
 					return 0 // exit
 				} else {
@@ -282,6 +307,8 @@ func mainloop(passwd []byte) int {
 			}
 
 		} else if mode == UiShowEntry {
+
+			// show a selected entry
 
 			e := j.GetEntry(selEntry)
 			if e != nil {
@@ -308,7 +335,9 @@ func mainloop(passwd []byte) int {
 			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RESET_DIM)); Readline()
 			mode = lastMode
 
-		} else if mode == UiEditEntry {
+		} else if mode == UiNewEntry {
+
+			// Create a new entry
 
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
@@ -319,11 +348,13 @@ func mainloop(passwd []byte) int {
 				Readline()
 				mode = lastMode
 			}
+
 			Out(AColMode(A_SET_DIM),
 				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
 				AColMode(A_RESET_DIM))
 			Nnl(2)
 
+			// read text from stdin (rune by rune)
 			builder := strings.Builder{}
 			reader := bufio.NewReader(os.Stdin)
 			for {
@@ -335,6 +366,8 @@ func mainloop(passwd []byte) int {
 				}
 			}
 
+			// Try to create new EncryptedEntry from the input text
+
 			e, err := NewEncryptedEntry(builder.String(), passwd)
 			if err != nil {
 				handleErr(err, "Error creating new entry")
@@ -345,6 +378,9 @@ func mainloop(passwd []byte) int {
 				handleErr(err, "Error adding new entry to journal")
 				continue
 			}
+			selEntry = e.Timestamp
+
+			// Update journal file
 
 			handleErr2 := func (err error, msg string) int {
 				Out(msg); Nl()
@@ -354,7 +390,6 @@ func mainloop(passwd []byte) int {
 				return 1
 			}
 
-			selEntry = e.Timestamp
 			err = j.Write()
 			if err == FileModifiedExternally {
 				Out("The file was modified by another program since the last read/write.")

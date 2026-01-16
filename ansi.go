@@ -5,7 +5,13 @@ import (
 	"strings"
 )
 
-// ANSI ESCAPE CODES
+/*
+
+This file includes ANSI Escape Codes, Sequences, functions, etc.
+Some of those may not be actively used right now, but stay for
+future usage.
+
+*/
 
 const (
 	// modes
