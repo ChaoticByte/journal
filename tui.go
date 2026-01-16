@@ -122,11 +122,11 @@ func ReadPass() ([]byte, error) {
 //
 
 const (
-	UiMainloopCtxListYears = iota
-	UiMainloopCtxListMonths
-	UiMainloopCtxListEntries
-	UiMainloopCtxShowEntry
-	UiMainloopCtxEditEntry
+	UiListYears = iota
+	UiListMonths
+	UiListEntries
+	UiShowEntry
+	UiEditEntry
 )
 
 const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
@@ -150,7 +150,7 @@ func mainloop(passwd []byte) int {
 	mode := -1
 	selYear := -1
 	selMonth := ""
-	var selEntry uint64 = 0
+	selEntry := uint64(0)
 
 	getHelpLine := func() string {
 		cmds := []string{}
@@ -160,10 +160,10 @@ func mainloop(passwd []byte) int {
 				AColMode(A_SET_BOLD) + cmd + AColMode(A_RESET_BOLD) + " " +
 				AColMode(A_SET_DIM) + expl + AColMode(A_RESET_DIM))
 		}
-		if mode != UiMainloopCtxListYears {
+		if mode != UiListYears {
 			addCmd("Enter", "back")
 		}
-		if mode == UiMainloopCtxListYears || mode == UiMainloopCtxListMonths || mode == UiMainloopCtxListEntries {
+		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
 			addCmd("new", "New Entry")
 			addCmd("q", "Exit the program")
 		}
@@ -173,109 +173,114 @@ func mainloop(passwd []byte) int {
 	//
 	for {
 		Out(A_RESET, A_CUR_HOME); Nl()
-		switch mode {
 
-		case UiMainloopCtxListYears:
+		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
+
+			// choices
+			choices := [][2]string{}
+
+			// used later
 			years := []int{}
-			choices := [][2]string{}
-			es := j.GetEntries()
-			slices.Sort(es)
-			for _, ts := range es {
-				year := time.UnixMicro(int64(ts)).Local().Year()
-				if !slices.Contains(years, year) {
-					years = append(years, year)
-					choices = append(choices, [2]string{strconv.Itoa(year), ""})
-				}
-			}
-			lastMode = mode
-			sel := MultiChoiceOrCommand(
-				choices,
-				[]string{"new", "q"},
-				"Please select a year.",
-				getHelpLine())
-			if sel == -1 {
-				mode = UiMainloopCtxEditEntry
-				continue
-			} else if sel < -1 {
-				return 0 // exit
-			}
-			selYear = years[sel]
-			mode = UiMainloopCtxListMonths
-
-		case UiMainloopCtxListMonths:
 			months := []string{}
-			choices := [][2]string{}
-			i := 0
-			es := j.GetEntries()
-			slices.Sort(es)
-			for _, ts := range es {
-				year := time.UnixMicro(int64(ts)).Local().Year()
-				if year == selYear {
-					month := time.UnixMicro(int64(ts)).Local().Month().String()
-					if !slices.Contains(months, month) {
-						months = append(months, month)
-						choices = append(choices, [2]string{strconv.Itoa(i+1), month})
-						i += 1
-					}
-				}
-			}
-			lastMode = mode
-			sel := MultiChoiceOrCommand(
-				choices,
-				[]string{"", "new", "q"},
-				"Please select a month.",
-				getHelpLine())
-			if sel == -1 {
-				mode = UiMainloopCtxListYears
-			} else if sel == -2 {
-				mode = UiMainloopCtxEditEntry
-			} else if sel < -2 {
-				return 0 // exit
-			} else {
-				selMonth = months[sel]
-				mode = UiMainloopCtxListEntries
-			}
-
-		case UiMainloopCtxListEntries:
 			entries := []uint64{}
-			choices := [][2]string{}
+
 			es := j.GetEntries()
 			slices.Sort(es)
 			i := 0
 			for _, ts := range es {
 				year := time.UnixMicro(int64(ts)).Local().Year()
 				month := time.UnixMicro(int64(ts)).Local().Month().String()
-				if year == selYear && month == selMonth {
-					if !slices.Contains(entries, ts) {
-						entries = append(entries, ts)
-						choices = append(
-							choices,
-							[2]string{
-								strconv.Itoa(i+1),
-								time.UnixMicro(int64(ts)).Format(EntryTimeFormat)},
-						)
-						i += 1
+				switch mode {
+				case UiListYears:
+					if !slices.Contains(years, year) {
+						years = append(years, year)
+						choices = append(choices, [2]string{strconv.Itoa(year), ""})
+					}
+				case UiListMonths:
+					if year == selYear {
+						if !slices.Contains(months, month) {
+							months = append(months, month)
+							choices = append(choices, [2]string{strconv.Itoa(i+1), month})
+							i += 1
+						}
+					}
+				case UiListEntries:
+					if year == selYear && month == selMonth {
+						if !slices.Contains(entries, ts) {
+							entries = append(entries, ts)
+							choices = append(
+								choices,
+								[2]string{
+									strconv.Itoa(i+1),
+									time.UnixMicro(int64(ts)).Format(EntryTimeFormat)},
+							)
+							i += 1
+						}
 					}
 				}
 			}
-			sel := MultiChoiceOrCommand(
-				choices,
-				[]string{"", "new", "q"},
-				"Please select an entry.",
-				getHelpLine())
-			lastMode = mode
-			if sel == -1 {
-				mode = UiMainloopCtxListMonths
-			} else if sel == -2 {
-				mode = UiMainloopCtxEditEntry
-			} else if sel < -2 {
-				return 0 // exit
+
+			// commands
+			commands := []string{}
+			if mode == UiListYears {
+				commands = []string{"new", "q"}
 			} else {
-				selEntry = entries[sel]
-				mode = UiMainloopCtxShowEntry
+				commands = []string{"", "new", "q"}
 			}
 
-		case UiMainloopCtxShowEntry:
+			// prompt
+			prompt := ""
+			switch mode {
+			case UiListYears:
+				prompt = "Please select a year:"
+			case UiListMonths:
+				prompt = "Please select a month:"
+			case UiListEntries:
+				prompt = "Please select an entry:"
+			}
+
+			sel := MultiChoiceOrCommand(
+				choices,
+				commands,
+				prompt,
+				getHelpLine())
+
+			lastMode = mode
+
+			switch mode {
+			case UiListYears:
+				if sel == -1 {
+					mode = UiEditEntry
+					continue
+				} else if sel < -1 {
+					return 0 // exit
+				}
+				selYear = years[sel]
+				mode = UiListMonths
+			case UiListMonths:
+				if sel == -1 {
+					mode = UiListYears
+				} else if sel == -2 {
+					mode = UiEditEntry
+				} else if sel < -2 {
+					return 0 // exit
+				} else {
+					selMonth = months[sel]
+					mode = UiListEntries
+				}
+			case UiListEntries:
+				if sel == -1 {
+					mode = UiListMonths
+				} else if sel == -2 {
+					mode = UiEditEntry
+				} else if sel < -2 {
+					return 0 // exit
+				} else {
+					selEntry = entries[sel]
+					mode = UiShowEntry
+				}
+			}
+		} else if mode == UiShowEntry {
 			e := j.GetEntry(selEntry)
 			if e != nil {
 				Out("[Decrypting ...] ")
@@ -299,8 +304,7 @@ func mainloop(passwd []byte) int {
 			}
 			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RESET_DIM)); Readline()
 			mode = lastMode
-
-		case UiMainloopCtxEditEntry:
+		} else if mode == UiEditEntry {
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
@@ -365,9 +369,9 @@ func mainloop(passwd []byte) int {
 				Out(AColMode(A_SET_DIM),"[Press Enter to exit program]", AColMode(A_RESET_DIM))
 				Readline()
 			}
-			mode = UiMainloopCtxShowEntry
-		default:
-			mode = UiMainloopCtxListYears
+			mode = UiShowEntry
+		} else {
+			mode = UiListYears
 		}
 	}
 }
