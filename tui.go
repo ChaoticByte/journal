@@ -54,7 +54,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 
 	defer Nl()
 
-	if prompt != "" { Out(AColMode(A_SET_DIM), prompt, AColMode(A_RES_DIM)); Nnl(2) }
+	if prompt != "" { Out(AColMode(A_SET_DIM), prompt, AColMode(A_RESET_DIM)); Nnl(2) }
 
 	if len(choices) > 0 {
 		Nl()
@@ -67,7 +67,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	Out("> ", A_SAVE_CUR_POS)
 	if helpLine != "" {
 		Nnl(3)
-		Out(AColMode(A_SET_UNDERLINE, A_SET_DIM), "commands:", AColMode(A_RES_UNDERLINE, A_RES_DIM))
+		Out(AColMode(A_SET_UNDERLINE, A_SET_DIM), "commands:", AColMode(A_RESET_UNDERLINE, A_RESET_DIM))
 		Nnl(2)
 		Out(helpLine)
 	}
@@ -157,8 +157,8 @@ func mainloop(passwd []byte) int {
 		addCmd := func(cmd string, expl string) {
 			cmds = append(
 				cmds,
-				AColMode(A_SET_BOLD) + cmd + AColMode(A_RES_BOLD) + " " +
-				AColMode(A_SET_DIM) + expl + AColMode(A_RES_DIM))
+				AColMode(A_SET_BOLD) + cmd + AColMode(A_RESET_BOLD) + " " +
+				AColMode(A_SET_DIM) + expl + AColMode(A_RESET_DIM))
 		}
 		if mode != UiMainloopCtxListYears {
 			addCmd("Enter", "back")
@@ -292,12 +292,12 @@ func mainloop(passwd []byte) int {
 				Out("Entry not found!"); Nnl(2)
 				Out(AColMode(A_SET_DIM),
 					"[Press ENTER to go back]",
-					AColMode(A_RES_DIM))
+					AColMode(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 				continue
 			}
-			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RES_DIM)); Readline()
+			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RESET_DIM)); Readline()
 			mode = lastMode
 
 		case UiMainloopCtxEditEntry:
@@ -306,13 +306,13 @@ func mainloop(passwd []byte) int {
 				Out(err.Error()); Nnl(2)
 				Out(AColMode(A_SET_DIM),
 					"[Press ENTER to go back]",
-					AColMode(A_RES_DIM))
+					AColMode(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 			}
 			Out(AColMode(A_SET_DIM),
 				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
-				AColMode(A_RES_DIM))
+				AColMode(A_RESET_DIM))
 			Nnl(2)
 
 			builder := strings.Builder{}
@@ -347,7 +347,7 @@ func mainloop(passwd []byte) int {
 				if err != nil {
 					Out("Couldn't overwrite file. aborting."); Nl()
 					Out(err); Nnl(2)
-					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RES_DIM))
+					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
 					Readline()
 					return 1
 				}
@@ -355,14 +355,14 @@ func mainloop(passwd []byte) int {
 				if err != nil {
 					Out("Couldn't overwrite file. aborting."); Nl()
 					Out(err); Nnl(2)
-					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RES_DIM))
+					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
 					Readline()
 					return 1
 				}
 			} else if err != nil {
 				Out("Couldn't write journal file. aborting."); Nl()
 				Out(err); Nnl(2)
-				Out(AColMode(A_SET_DIM),"[Press Enter to exit program]", AColMode(A_RES_DIM))
+				Out(AColMode(A_SET_DIM),"[Press Enter to exit program]", AColMode(A_RESET_DIM))
 				Readline()
 			}
 			mode = UiMainloopCtxShowEntry
@@ -381,7 +381,7 @@ func ShowUsageAndExit(a0 string, code int) {
 	os.Exit(code)
 }
 
-func CliEntrypoint() {
+func Entrypoint() {
 	args := os.Args
 	// parse cli args
 	if len(args) < 2 {
@@ -403,11 +403,11 @@ func CliEntrypoint() {
 		os.Exit(1)
 	}
 
-	Out("Opening journal file at ", AColMode(A_SET_DIM), a1, AColMode(A_RES_DIM), " ...")
+	Out("Opening journal file at ", AColMode(A_SET_DIM), a1, AColMode(A_RESET_DIM), " ...")
 	Nnl(2);
 	j, err = OpenJournalFile(a1)
 	if err != nil { 
-		Out(AColMode(A_COL_RED_FG), "Couldn't open journal file!", AColMode(A_COL_RES_FG))
+		Out(AColMode(A_COL_RED_FG), "Couldn't open journal file!", AColMode(A_COL_RESET_FG))
 		Nl()
 		Out(err); Nnl(2)
 		Out("[Press Enter to exit]"); Readline()

@@ -10,21 +10,21 @@ import (
 const (
 	// modes
 	A_SET_BOLD = "1"
-	A_RES_BOLD = "22"
+	A_RESET_BOLD = "22"
 	A_SET_DIM = "2"
-	A_RES_DIM = "22"
+	A_RESET_DIM = "22"
 	A_SET_ITALIC = "3"
-	A_RES_ITALIC = "23"
+	A_RESET_ITALIC = "23"
 	A_SET_UNDERLINE = "4"
-	A_RES_UNDERLINE = "24"
+	A_RESET_UNDERLINE = "24"
 	A_SET_BLINK = "5"
-	A_RES_BLINK = "25"
+	A_RESET_BLINK = "25"
 	A_SET_INVERTED = "7"
-	A_RES_INVERTED = "27"
+	A_RESET_INVERTED = "27"
 	A_SET_HIDDEN = "8"
-	A_RES_HIDDEN = "28"
+	A_RESET_HIDDEN = "28"
 	A_SET_STRIKETHROUGH = "9"
-	A_RES_STRIKETHROUGH = "29"
+	A_RESET_STRIKETHROUGH = "29"
 
 	// colors
 	A_COL_BLACK_FG = "30"
@@ -45,8 +45,8 @@ const (
 	A_COL_WHITE_BG = "47"
 
 	// reset colors
-	A_COL_RES_FG = "39"
-	A_COL_RES_BG = "49"
+	A_COL_RESET_FG = "39"
+	A_COL_RESET_BG = "49"
 
 	// bright colors
 	A_COL_BRIGHT_BLACK_FG = "90"
