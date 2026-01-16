@@ -280,23 +280,26 @@ func mainloop(passwd []byte) int {
 					mode = UiShowEntry
 				}
 			}
+
 		} else if mode == UiShowEntry {
+
 			e := j.GetEntry(selEntry)
 			if e != nil {
 				Out("[Decrypting ...] ")
 				txt, err := e.Decrypt(passwd)
 				Out("\r", A_ERASE_LINE)
 				if err != nil {
-					Out("Entry could not be decrypted!")
-					Out("Either the password is wrong or the entry is corrupted.")
+					Out("Entry could not be decrypted!"); Nl()
+					Out("Either the password is wrong or the entry is corrupted."); Nnl(2)
 				} else {
+					// Output Entry
 					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat)); Nnl(2)
 					Out(txt); Nnl(2)
 				}
 			} else {
 				Out("Entry not found!"); Nnl(2)
 				Out(AColMode(A_SET_DIM),
-					"[Press ENTER to go back]",
+					"[Press Enter to go back]",
 					AColMode(A_RESET_DIM))
 				Readline()
 				mode = lastMode
@@ -304,12 +307,14 @@ func mainloop(passwd []byte) int {
 			}
 			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RESET_DIM)); Readline()
 			mode = lastMode
+
 		} else if mode == UiEditEntry {
+
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
 				Out(AColMode(A_SET_DIM),
-					"[Press ENTER to go back]",
+					"[Press Enter to go back]",
 					AColMode(A_RESET_DIM))
 				Readline()
 				mode = lastMode
@@ -340,6 +345,15 @@ func mainloop(passwd []byte) int {
 				handleErr(err, "Error adding new entry to journal")
 				continue
 			}
+
+			handleErr2 := func (err error, msg string) int {
+				Out(msg); Nl()
+				Out(err); Nnl(2)
+				Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
+				Readline()
+				return 1
+			}
+
 			selEntry = e.Timestamp
 			err = j.Write()
 			if err == FileModifiedExternally {
@@ -349,29 +363,22 @@ func mainloop(passwd []byte) int {
 				Readline(); Nl()
 				err = j.updateLastModifiedTime()
 				if err != nil {
-					Out("Couldn't overwrite file. aborting."); Nl()
-					Out(err); Nnl(2)
-					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
-					Readline()
-					return 1
+					return handleErr2(err, "Couldn't overwrite file. aborting.")
 				}
 				err = j.Write()
 				if err != nil {
-					Out("Couldn't overwrite file. aborting."); Nl()
-					Out(err); Nnl(2)
-					Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
-					Readline()
-					return 1
+					return handleErr2(err, "Couldn't overwrite file. aborting.")
 				}
 			} else if err != nil {
-				Out("Couldn't write journal file. aborting."); Nl()
-				Out(err); Nnl(2)
-				Out(AColMode(A_SET_DIM),"[Press Enter to exit program]", AColMode(A_RESET_DIM))
-				Readline()
+				return handleErr2(err, "Couldn't write journal file. aborting.")
 			}
+
 			mode = UiShowEntry
+
 		} else {
+
 			mode = UiListYears
+
 		}
 	}
 }
@@ -386,8 +393,8 @@ func ShowUsageAndExit(a0 string, code int) {
 }
 
 func Entrypoint() {
-	args := os.Args
 	// parse cli args
+	args := os.Args
 	if len(args) < 2 {
 		ShowUsageAndExit(args[0], 1)
 	}
