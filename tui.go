@@ -320,7 +320,10 @@ func mainloop(passwd []byte) int {
 					Out("Either the password is wrong or the entry is corrupted."); Nnl(2)
 				} else {
 					// Output Entry
-					Out(time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat)); Nnl(2)
+					Out(AColMode(A_SET_UNDERLINE),
+						time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat),
+						AColMode(A_RESET_UNDERLINE))
+					Nnl(2)
 					Out(txt); Nnl(2)
 				}
 			} else {
