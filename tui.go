@@ -66,7 +66,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	defer Nl()
 
 	// output prompt, if any
-	if prompt != "" { Out(AColMode(A_SET_DIM), prompt, AColMode(A_RESET_DIM)); Nnl(2) }
+	if prompt != "" { Out(Am(A_SET_DIM), prompt, Am(A_RESET_DIM)); Nnl(2) }
 
 	// print choices, if any
 	if len(choices) > 0 {
@@ -81,7 +81,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	Out("> ", A_SAVE_CUR_POS)
 	if helpLine != "" {
 		Nnl(3)
-		Out(AColMode(A_SET_UNDERLINE, A_SET_DIM), "commands:", AColMode(A_RESET_UNDERLINE, A_RESET_DIM))
+		Out(Am(A_SET_UNDERLINE, A_SET_DIM), "commands:", Am(A_RESET_UNDERLINE, A_RESET_DIM))
 		Nnl(2)
 		Out(helpLine)
 	}
@@ -177,8 +177,8 @@ func mainloop(passwd []byte) int {
 		addCmd := func(cmd string, expl string) {
 			cmds = append(
 				cmds,
-				AColMode(A_SET_BOLD) + cmd + AColMode(A_RESET_BOLD) + " " +
-				AColMode(A_SET_DIM) + expl + AColMode(A_RESET_DIM))
+				Am(A_SET_BOLD) + cmd + Am(A_RESET_BOLD) + " " +
+				Am(A_SET_DIM) + expl + Am(A_RESET_DIM))
 		}
 		if mode != UiListYears {
 			addCmd("Enter", "back")
@@ -320,22 +320,22 @@ func mainloop(passwd []byte) int {
 					Out("Either the password is wrong or the entry is corrupted."); Nnl(2)
 				} else {
 					// Output Entry
-					Out(AColMode(A_SET_UNDERLINE),
+					Out(Am(A_SET_UNDERLINE),
 						time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat),
-						AColMode(A_RESET_UNDERLINE))
+						Am(A_RESET_UNDERLINE))
 					Nnl(2)
 					Out(txt); Nnl(2)
 				}
 			} else {
 				Out("Entry not found!"); Nnl(2)
-				Out(AColMode(A_SET_DIM),
+				Out(Am(A_SET_DIM),
 					"[Press Enter to go back]",
-					AColMode(A_RESET_DIM))
+					Am(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 				continue
 			}
-			Out(AColMode(A_SET_DIM), "[Press Enter to go back]", AColMode(A_RESET_DIM)); Readline()
+			Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM)); Readline()
 			mode = lastMode
 
 		} else if mode == UiNewEntry {
@@ -345,16 +345,16 @@ func mainloop(passwd []byte) int {
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
-				Out(AColMode(A_SET_DIM),
+				Out(Am(A_SET_DIM),
 					"[Press Enter to go back]",
-					AColMode(A_RESET_DIM))
+					Am(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 			}
 
-			Out(AColMode(A_SET_DIM),
+			Out(Am(A_SET_DIM),
 				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
-				AColMode(A_RESET_DIM))
+				Am(A_RESET_DIM))
 			Nnl(2)
 
 			// read text from stdin (rune by rune)
@@ -388,7 +388,7 @@ func mainloop(passwd []byte) int {
 			handleErr2 := func (err error, msg string) int {
 				Out(msg); Nl()
 				Out(err); Nnl(2)
-				Out(AColMode(A_SET_DIM), "[Press Enter to exit program]", AColMode(A_RESET_DIM))
+				Out(Am(A_SET_DIM), "[Press Enter to exit program]", Am(A_RESET_DIM))
 				Readline()
 				return 1
 			}
@@ -452,11 +452,11 @@ func Entrypoint() {
 		os.Exit(1)
 	}
 
-	Out("Opening journal file at ", AColMode(A_SET_DIM), a1, AColMode(A_RESET_DIM), " ...")
+	Out("Opening journal file at ", Am(A_SET_DIM), a1, Am(A_RESET_DIM), " ...")
 	Nnl(2);
 	j, err = OpenJournalFile(a1)
 	if err != nil { 
-		Out(AColMode(A_COL_RED_FG), "Couldn't open journal file!", AColMode(A_COL_RESET_FG))
+		Out(Am(A_COL_RED_FG), "Couldn't open journal file!", Am(A_COL_RESET_FG))
 		Nl()
 		Out(err); Nnl(2)
 		Out("[Press Enter to exit]"); Readline()

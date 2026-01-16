@@ -73,7 +73,7 @@ const (
 	A_COL_BRIGHT_WHITE_BG = "107"
 )
 
-func AColMode(codes ...string) string {
+func Am(codes ...string) string {
 	seq := "\u001b["
 	seq += strings.Join(codes, ";")
 	seq += "m"
