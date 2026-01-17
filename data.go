@@ -59,6 +59,38 @@ func (j *JournalFile) GetLatestEntry() uint64 {
 	return es[len(es)-1]
 }
 
+func (j *JournalFile) GetPreviousEntry(current uint64) uint64 {
+	// returns timestamp, or 0 if not found
+	es := j.GetEntries()
+	if len(es) == 0 { return 0 }
+	slices.Sort(es)
+	last := uint64(0)
+	for _, ts := range es {
+		if current == ts {
+			return last
+		}
+		last = ts
+	}
+	return 0
+}
+
+func (j *JournalFile) GetNextEntry(current uint64) uint64 {
+	// returns timestamp, or 0 if not found
+	es := j.GetEntries()
+	if len(es) == 0 { return 0 }
+	slices.Sort(es)
+	lastWasCurrent := false
+	for _, ts := range es {
+		if lastWasCurrent {
+			return ts
+		}
+		if current == ts {
+			lastWasCurrent = true
+		}
+	}
+	return 0
+}
+
 func (j *JournalFile) GetEntry(ts uint64) *EncryptedEntry {
 	if j.closed { return nil }
 	e, found := j.entries[ts]

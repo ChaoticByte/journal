@@ -187,6 +187,10 @@ func mainloop(passwd []byte) int {
 		if mode == UiShowEntry {
 			addCmd("delete", "Delete this entry")
 		}
+		if mode == UiShowEntry {
+			addCmd("a", "Previous")
+			addCmd("d", "Next")
+		}
 		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries || mode == UiShowEntry {
 			addCmd("l", "Latest entry")
 			addCmd("n", "New Entry")
@@ -398,23 +402,35 @@ func mainloop(passwd []byte) int {
 
 			sel := MultiChoiceOrCommand(
 				[][2]string{},
-				[]string{"", "l", "q", "n", "delete"},
+				[]string{"", "a", "d", "l", "q", "n", "delete"},
 				"", getHelp())
 
 			switch sel {
 			case -1:
 				mode = lastMode
 			case -2:
+				prev := j.GetPreviousEntry(selEntry)
+				if prev > 0 {
+					selEntry = prev
+					mode = UiShowEntry
+				}
+			case -3:
+				next := j.GetNextEntry(selEntry)
+				if next > 0 {
+					selEntry = next
+					mode = UiShowEntry
+				}
+			case -4:
 				latest := j.GetLatestEntry()
 				if latest > 0 {
 					selEntry = latest
 					mode = UiShowEntry
 				}
-			case -3:
-				return 0 // exit
-			case -4:
-				mode = UiNewEntry
 			case -5:
+				return 0 // exit
+			case -6:
+				mode = UiNewEntry
+			case -7:
 				Nl(); Out(A_ERASE_REST_OF_SCREEN)
 				answer := MultiChoiceOrCommand(
 					[][2]string{{"yes", ""}, {"no", ""}},
