@@ -370,6 +370,7 @@ func mainloop(passwd []byte) int {
 						time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat),
 						Am(A_RESET_UNDERLINE))
 					Nnl(4); Out(txt); Nnl(3)
+					txt = "" // don't keep the plaintext in memory
 				}
 			} else {
 				// this will likely never get called
