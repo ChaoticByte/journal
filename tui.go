@@ -74,11 +74,11 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 		for _, c := range choices {
 			Out(c[0], ") ", c[1]); Nl()
 		}
-		Nnl(2)
+		Nl()
 	}
 
 	// output > and save cursor position
-	Out("> ", A_SAVE_CUR_POS)
+	Nl(); Out("> ", A_SAVE_CUR_POS)
 	if helpLine != "" {
 		Nnl(3)
 		Out(Am(A_SET_UNDERLINE, A_SET_DIM), "commands:", Am(A_RESET_UNDERLINE, A_RESET_DIM))
@@ -207,36 +207,38 @@ func mainloop(passwd []byte) int {
 
 			// collect list of choices based on filtered entries
 			es := j.GetEntries()
-			slices.Sort(es)
-			i := 0
-			for _, ts := range es {
-				year := time.UnixMicro(int64(ts)).Local().Year()
-				month := time.UnixMicro(int64(ts)).Local().Month().String()
-				switch mode {
-				case UiListYears:
-					if !slices.Contains(years, year) {
-						years = append(years, year)
-						choices = append(choices, [2]string{strconv.Itoa(year), ""})
-					}
-				case UiListMonths:
-					if year == selYear {
-						if !slices.Contains(months, month) {
-							months = append(months, month)
-							choices = append(choices, [2]string{strconv.Itoa(i+1), month})
-							i += 1
+			if len(es) > 0 {
+				slices.Sort(es)
+				i := 0
+				for _, ts := range es {
+					year := time.UnixMicro(int64(ts)).Local().Year()
+					month := time.UnixMicro(int64(ts)).Local().Month().String()
+					switch mode {
+					case UiListYears:
+						if !slices.Contains(years, year) {
+							years = append(years, year)
+							choices = append(choices, [2]string{strconv.Itoa(year), ""})
 						}
-					}
-				case UiListEntries:
-					if year == selYear && month == selMonth {
-						if !slices.Contains(entries, ts) {
-							entries = append(entries, ts)
-							choices = append(
-								choices,
-								[2]string{
-									strconv.Itoa(i+1),
-									time.UnixMicro(int64(ts)).Format(EntryTimeFormat)},
-							)
-							i += 1
+					case UiListMonths:
+						if year == selYear {
+							if !slices.Contains(months, month) {
+								months = append(months, month)
+								choices = append(choices, [2]string{strconv.Itoa(i+1), month})
+								i += 1
+							}
+						}
+					case UiListEntries:
+						if year == selYear && month == selMonth {
+							if !slices.Contains(entries, ts) {
+								entries = append(entries, ts)
+								choices = append(
+									choices,
+									[2]string{
+										strconv.Itoa(i+1),
+										time.UnixMicro(int64(ts)).Format(EntryTimeFormat)},
+								)
+								i += 1
+							}
 						}
 					}
 				}
@@ -252,13 +254,17 @@ func mainloop(passwd []byte) int {
 
 			// prompt
 			prompt := ""
-			switch mode {
-			case UiListYears:
-				prompt = "Please select a year:"
-			case UiListMonths:
-				prompt = "Please select a month:"
-			case UiListEntries:
-				prompt = "Please select an entry:"
+			if len(es) > 0 {
+				switch mode {
+				case UiListYears:
+					prompt = "Please select a year:"
+				case UiListMonths:
+					prompt = "Please select a month:"
+				case UiListEntries:
+					prompt = "Please select an entry:"
+				}
+			} else {
+				prompt = "There are no entries yet."
 			}
 
 			sel := MultiChoiceOrCommand(
