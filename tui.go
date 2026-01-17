@@ -171,7 +171,7 @@ func mainloop(passwd []byte) int {
 	selMonth := ""
 	selEntry := uint64(1) // entry 0 is reserved, so use as default.
 
-	getHelpLine := func() string {
+	getHelpLine := func () string {
 		// returns the help line for the current mode
 		cmds := []string{}
 		addCmd := func(cmd string, expl string) {
@@ -187,13 +187,16 @@ func mainloop(passwd []byte) int {
 			addCmd("delete", "Delete this entry")
 		}
 		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries || mode == UiShowEntry {
-			addCmd("new", "New Entry")
+			addCmd("l", "Latest entry")
+			addCmd("n", "New Entry")
 			addCmd("q", "Exit the program")
 		}
 		return strings.Join(cmds, "  ")
 	}
 
 	writeJournalFile := func () int {
+		// returns a code to exit or -1 if no error
+
 		handleErr2 := func (err error, msg string) int {
 			Out(msg); Nl()
 			Out(err); Nnl(2)
@@ -280,9 +283,9 @@ func mainloop(passwd []byte) int {
 			// commands
 			commands := []string{}
 			if mode == UiListYears {
-				commands = []string{"new", "q"}
+				commands = []string{"l", "n", "q"}
 			} else {
-				commands = []string{"", "new", "q"}
+				commands = []string{"", "l", "n", "q"}
 			}
 
 			// prompt
@@ -318,37 +321,47 @@ func mainloop(passwd []byte) int {
 
 			lastMode = mode
 
-			switch mode {
-			case UiListYears:
+			if mode == UiListYears {
 				if sel == -1 {
+					latest := j.GetLatestEntry()
+					if latest > 0 {
+						selEntry = latest
+						mode = UiShowEntry
+					}
+				} else if sel == -2 {
+					mode = UiNewEntry
+				} else if sel < -2 {
+					return 0 // exit
+				} else {
+					selYear = years[sel]
+					mode = UiListMonths
+				}
+			} else if mode == UiListMonths || mode == UiListEntries {
+				if sel == -1 {
+					if mode == UiListMonths {
+						mode = UiListYears
+					} else {
+						mode = UiListMonths
+					}
+				} else if sel == -2 {
+					latest := j.GetLatestEntry()
+					if latest > 0 {
+						selEntry = latest
+						mode = UiShowEntry
+					}
+				} else if sel == -3 {
 					mode = UiNewEntry
 					continue
-				} else if sel < -1 {
-					return 0 // exit
-				}
-				selYear = years[sel]
-				mode = UiListMonths
-			case UiListMonths:
-				if sel == -1 {
-					mode = UiListYears
-				} else if sel == -2 {
-					mode = UiNewEntry
-				} else if sel < -2 {
+				} else if sel < -3 {
 					return 0 // exit
 				} else {
-					selMonth = months[sel]
-					mode = UiListEntries
-				}
-			case UiListEntries:
-				if sel == -1 {
-					mode = UiListMonths
-				} else if sel == -2 {
-					mode = UiNewEntry
-				} else if sel < -2 {
-					return 0 // exit
-				} else {
+					if mode == UiListMonths {
+						selMonth = months[sel]
+						mode = UiListEntries
+					} else {
 					selEntry = entries[sel]
 					mode = UiShowEntry
+					}
 				}
 			}
 
@@ -384,17 +397,23 @@ func mainloop(passwd []byte) int {
 
 			sel := MultiChoiceOrCommand(
 				[][2]string{},
-				[]string{"", "q", "new", "delete"},
+				[]string{"", "l", "q", "n", "delete"},
 				"", getHelpLine())
 
 			switch sel {
 			case -1:
 				mode = lastMode
 			case -2:
-				return 0 // exit
+				latest := j.GetLatestEntry()
+				if latest > 0 && latest != selEntry {
+					selEntry = latest
+					mode = UiShowEntry
+				}
 			case -3:
-				mode = UiNewEntry
+				return 0 // exit
 			case -4:
+				mode = UiNewEntry
+			case -5:
 				Nl(); Out(A_ERASE_REST_OF_SCREEN)
 				answer := MultiChoiceOrCommand(
 					[][2]string{{"yes", ""}, {"no", ""}},

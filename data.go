@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -48,6 +49,14 @@ func (j *JournalFile) GetEntries() []uint64 {
 		}
 	}
 	return es
+}
+
+func (j *JournalFile) GetLatestEntry() uint64 {
+	// returns timestamp, or 0 if nonexistent
+	es := j.GetEntries()
+	if len(es) == 0 { return 0 }
+	slices.Sort(es)
+	return es[len(es)-1]
 }
 
 func (j *JournalFile) GetEntry(ts uint64) *EncryptedEntry {
