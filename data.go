@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -42,7 +43,9 @@ func (j *JournalFile) GetEntries() []uint64 {
 	if j.closed { return []uint64{} }
 	es := []uint64{}
 	for ts := range j.entries {
-		es = append(es, ts)
+		if ts != 0 { // filter out reserved entry 0
+			es = append(es, ts)
+		}
 	}
 	return es
 }
@@ -147,18 +150,25 @@ func (j *JournalFile) read() error {
 }
 
 
-func OpenJournalFile(file string) (*JournalFile, error) {
+func OpenJournalFile(file string, password []byte) (*JournalFile, error) {
 	j := JournalFile{}
 	j.Filepath = file
 	// check file
 	fileinfo, err := os.Stat(j.Filepath)
 	if os.IsNotExist(err) {
-		// init
+		// create reserved entry 0
+		e := &EncryptedEntry{Timestamp: 0}
+		cipherText, salt, noncePfx, err := EncryptText(password, rand.Text(), e.Timestamp)
+		if err != nil { return nil, err }
+		e.EncryptedText = cipherText
+		e.Salt = salt
+		e.NoncePfx = noncePfx
+		// init journal
 		j.Version = JournalVersion
 		j.entries = map[uint64]EncryptedEntry{}
+		err = j.AddEntry(e); if err != nil { return &j, err }
 		j.needWrite = true
-		err = j.Write()
-		if err != nil { return &j, err }
+		err = j.Write(); if err != nil { return &j, err }
 	} else {
 		if err != nil { return &j, err }
 		if fileinfo == nil {
@@ -166,8 +176,10 @@ func OpenJournalFile(file string) (*JournalFile, error) {
 		} else if fileinfo.IsDir() {
 			return &j, FilepathIsDirectory
 		}
-		err = j.read(); if err != nil { return &j, err }
 	}
+	err = j.read(); if err != nil { return &j, err }
+	// check password by decrypting reserved entry 0
+	_, err = j.GetEntry(0).Decrypt(password)
 	return &j, err
 }
 

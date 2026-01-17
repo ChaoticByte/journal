@@ -454,7 +454,7 @@ func Entrypoint() {
 
 	Out("Opening journal file at ", Am(A_SET_DIM), a1, Am(A_RESET_DIM), " ...")
 	Nnl(2);
-	j, err = OpenJournalFile(a1)
+	j, err = OpenJournalFile(a1, passwd)
 	if err != nil { 
 		Out(Am(A_COL_RED_FG), "Couldn't open journal file!", Am(A_COL_RESET_FG))
 		Nl()
