@@ -183,11 +183,44 @@ func mainloop(passwd []byte) int {
 		if mode != UiListYears {
 			addCmd("Enter", "back")
 		}
-		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
+		if mode == UiShowEntry {
+			addCmd("delete", "Delete this entry")
+		}
+		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries || mode == UiShowEntry {
 			addCmd("new", "New Entry")
 			addCmd("q", "Exit the program")
 		}
 		return strings.Join(cmds, "  ")
+	}
+
+	writeJournalFile := func () int {
+		handleErr2 := func (err error, msg string) int {
+			Out(msg); Nl()
+			Out(err); Nnl(2)
+			Out(Am(A_SET_DIM), "[Press Enter to exit program]", Am(A_RESET_DIM))
+			Readline()
+			return 1
+		}
+
+		err := j.Write()
+		if err == FileModifiedExternally {
+			Out("The file was modified by another program since the last read/write.")
+			Nnl(2)
+			Out("[Press Enter when you are ready to overwrite the journal file]")
+			Readline(); Nl()
+			err = j.updateLastModifiedTime()
+			if err != nil {
+				return handleErr2(err, "Couldn't overwrite file. aborting.")
+			}
+			err = j.Write()
+			if err != nil {
+				return handleErr2(err, "Couldn't overwrite file. aborting.")
+			}
+		} else if err != nil {
+			return handleErr2(err, "Couldn't write journal file. aborting.")
+		}
+
+		return -1
 	}
 
 	for { // the actual main loop
@@ -264,7 +297,14 @@ func mainloop(passwd []byte) int {
 					prompt = "Please select an entry:"
 				}
 			} else {
-				prompt = "There are no entries yet."
+				switch mode {
+				case UiListYears:
+					prompt = "Years (There are no entries yet)"
+				case UiListMonths:
+					prompt = "Months (There are no entries yet)"
+				case UiListEntries:
+					prompt = "Entries (There are no entries yet)"
+				}
 			}
 
 			sel := MultiChoiceOrCommand(
@@ -329,20 +369,45 @@ func mainloop(passwd []byte) int {
 					Out(Am(A_SET_UNDERLINE),
 						time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat),
 						Am(A_RESET_UNDERLINE))
-					Nnl(2)
-					Out(txt); Nnl(2)
+					Nnl(4); Out(txt); Nnl(3)
 				}
 			} else {
+				// this will likely never get called
+				// but catched a nil pointer deref
 				Out("Entry not found!"); Nnl(2)
-				Out(Am(A_SET_DIM),
-					"[Press Enter to go back]",
-					Am(A_RESET_DIM))
+				Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 				continue
 			}
-			Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM)); Readline()
-			mode = lastMode
+
+			sel := MultiChoiceOrCommand(
+				[][2]string{},
+				[]string{"", "q", "new", "delete"},
+				"", getHelpLine())
+
+			switch sel {
+			case -1:
+				mode = lastMode
+			case -2:
+				return 0 // exit
+			case -3:
+				mode = UiNewEntry
+			case -4:
+				Nl(); Out(A_ERASE_REST_OF_SCREEN)
+				answer := MultiChoiceOrCommand(
+					[][2]string{{"yes", ""}, {"no", ""}},
+					[]string{},
+					"Are you sure that you want to delete this entry?", "")
+				if answer == 0 {
+					mode = lastMode
+					j.DeleteEntry(selEntry)
+					statusCode := writeJournalFile()
+					if statusCode >= 0 {
+						return statusCode
+					}
+				}
+			}
 
 		} else if mode == UiNewEntry {
 
@@ -351,9 +416,7 @@ func mainloop(passwd []byte) int {
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
-				Out(Am(A_SET_DIM),
-					"[Press Enter to go back]",
-					Am(A_RESET_DIM))
+				Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM))
 				Readline()
 				mode = lastMode
 			}
@@ -377,7 +440,7 @@ func mainloop(passwd []byte) int {
 
 			// Try to create new EncryptedEntry from the input text
 
-			e, err := NewEncryptedEntry(builder.String(), passwd)
+			e, err := NewEncryptedEntry(strings.Trim(builder.String(), " \n"), passwd)
 			if err != nil {
 				handleErr(err, "Error creating new entry")
 				continue
@@ -390,31 +453,9 @@ func mainloop(passwd []byte) int {
 			selEntry = e.Timestamp
 
 			// Update journal file
-
-			handleErr2 := func (err error, msg string) int {
-				Out(msg); Nl()
-				Out(err); Nnl(2)
-				Out(Am(A_SET_DIM), "[Press Enter to exit program]", Am(A_RESET_DIM))
-				Readline()
-				return 1
-			}
-
-			err = j.Write()
-			if err == FileModifiedExternally {
-				Out("The file was modified by another program since the last read/write.")
-				Nnl(2)
-				Out("[Press Enter when you are ready to overwrite the journal file]")
-				Readline(); Nl()
-				err = j.updateLastModifiedTime()
-				if err != nil {
-					return handleErr2(err, "Couldn't overwrite file. aborting.")
-				}
-				err = j.Write()
-				if err != nil {
-					return handleErr2(err, "Couldn't overwrite file. aborting.")
-				}
-			} else if err != nil {
-				return handleErr2(err, "Couldn't write journal file. aborting.")
+			statusCode := writeJournalFile()
+			if statusCode >= 0 {
+				return statusCode
 			}
 
 			mode = UiShowEntry

@@ -82,8 +82,9 @@ func Am(codes ...string) string {
 
 // Screen & erase
 
-const A_RESET = "\u001b[3J\u001bc" // at least one of them should work
+const A_ERASE_REST_OF_SCREEN = "\u001b[0J"
 const A_ERASE_SCREEN = "\u001b[2J"
+const A_RESET = "\u001b[3J\u001bc" // at least one of them should work
 const A_ERASE_REST_OF_LINE = "\u001b[0K"
 const A_ERASE_LINE = "\u001b[2K"
 
