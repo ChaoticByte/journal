@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/awnumar/memguard"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -24,13 +25,17 @@ The 32 byte key for encryption is derived using Argon2ID. A 12-byte random salt 
 
 const ErrMsgInvalidNonceLen = "Assembled nonce has an invalid length!"
 
-func EncryptText(password []byte, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
+func EncryptText(password *memguard.Enclave, cleartext string, time uint64) ([]byte, [12]byte, [16]byte, error) {
 	// create random salt
 	salt := [12]byte{}
 	_, err := rand.Read(salt[:])
 	if err != nil { return []byte{}, salt, [16]byte{}, err }
 	// derive key
-	key := derive_key(password, salt)
+	lb, err := password.Open()
+	defer lb.Destroy()
+	if err != nil { return []byte{}, salt, [16]byte{}, err }
+	key := derive_key(lb.Bytes(), salt)
+	lb.Destroy()
 	// assemble nonce
 	noncePfx := [16]byte{}
 	_, err = rand.Read(noncePfx[:])
@@ -40,6 +45,7 @@ func EncryptText(password []byte, cleartext string, time uint64) ([]byte, [12]by
 	nonce = binary.BigEndian.AppendUint64(nonce, time)
 	// create aead cipher
 	aead, err := chacha20poly1305.NewX(key[:])
+	key = [32]byte{} // remove key from memory
 	if err != nil { return []byte{}, salt, noncePfx, err }
 	// encrypt
 	src := []byte(cleartext)
@@ -47,9 +53,13 @@ func EncryptText(password []byte, cleartext string, time uint64) ([]byte, [12]by
 	return dst, salt, noncePfx, err
 }
 
-func DecryptText(password []byte, ciphertext []byte, salt [12]byte, noncePfx [16]byte, time uint64) (string, error) {
+func DecryptText(password *memguard.Enclave, ciphertext []byte, salt [12]byte, noncePfx [16]byte, time uint64) (string, error) {
 	// derive key
-	key := derive_key(password, salt)
+	lb, err := password.Open()
+	defer lb.Destroy()
+	if err != nil { return "", err }
+	key := derive_key(lb.Bytes(), salt)
+	lb.Destroy()
 	// assemble nonce
 	nonce := []byte{}
 	nonce = append(nonce, noncePfx[:]...)
@@ -57,6 +67,7 @@ func DecryptText(password []byte, ciphertext []byte, salt [12]byte, noncePfx [16
 	if len(nonce) != 24 { return "", errors.New(ErrMsgInvalidNonceLen) }
 	// create aead cipher
 	aead, err := chacha20poly1305.NewX(key[:])
+	key = [32]byte{} // remove key from memory
 	if err != nil { return "", err }
 	// decrypt
 	dst, err := aead.Open(nil, nonce[:], ciphertext, nil)

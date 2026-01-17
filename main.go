@@ -1,3 +1,4 @@
+//go:build !addtestdata
 // +build !addtestdata
 
 package main

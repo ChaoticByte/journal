@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/awnumar/memguard"
 	"golang.org/x/term"
 )
 
@@ -60,7 +61,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 		<-c
 		if j != nil { j.Close() }
 		Out(A_RESET, A_CUR_HOME)
-		os.Exit(0)
+		memguard.SafeExit(0)
 	}()
 
 	defer Nl()
@@ -104,7 +105,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	}
 }
 
-func ReadPass() ([]byte, error) {
+func ReadPass() (*memguard.Enclave, error) {
 	// Read a password using term.ReadPassword()
 	// with additional fancy workarounds and shit
 
@@ -114,14 +115,14 @@ func ReadPass() ([]byte, error) {
 
 	// Handle SIGINT (+ manual cleanup of term.Readpassword)
 	fd := int(os.Stdout.Fd())
-	s, err := term.GetState(fd); if err != nil { return []byte{}, err }
+	s, err := term.GetState(fd); if err != nil { return nil, err }
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
 		term.Restore(fd, s)
 		Nl()
-		os.Exit(0)
+		memguard.SafeExit(0)
 	}()
 	defer term.Restore(fd, s) // doppelt hält besser
 
@@ -129,8 +130,10 @@ func ReadPass() ([]byte, error) {
 		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
 		pw, err := term.ReadPassword(fd); Nl()
 		if err != nil || len(pw) > 0 {
+			encl := memguard.NewEnclave(pw)
+			pw = nil // empty the plaintext password
 			Nl()
-			return pw, err
+			return encl, err
 		}
 	}
 }
@@ -147,7 +150,7 @@ const (
 
 const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 
-func mainloop(passwd []byte) int {
+func mainloop(passwd *memguard.Enclave) int {
 
 	// erase screen and reset screen on exit.
 	Out(A_ERASE_SCREEN, A_CUR_HOME)
@@ -160,7 +163,7 @@ func mainloop(passwd []byte) int {
 		<-c
 		j.Close()
 		Out(A_RESET, A_CUR_HOME)
-		os.Exit(0)
+		memguard.SafeExit(0)
 	}()
 	// :)
 
@@ -519,6 +522,9 @@ func ShowUsageAndExit(a0 string, code int) {
 }
 
 func Entrypoint() {
+	memguard.CatchInterrupt()
+	defer memguard.Purge()
+
 	// parse cli args
 	args := os.Args
 	if len(args) < 2 {
@@ -534,10 +540,10 @@ func Entrypoint() {
 
 	Out("Please enter your encryption key."); Nl()
 	passwd, err := ReadPass()
-	if err != nil {
+	if err != nil || passwd == nil {
 		Out("Couldn't get password from commandline safely."); Nl()
 		Out(err); Nl()
-		os.Exit(1)
+		memguard.SafeExit(1)
 	}
 
 	Out("Opening journal file at ", Am(A_SET_DIM), a1, Am(A_RESET_DIM), " ...")
@@ -548,9 +554,9 @@ func Entrypoint() {
 		Nl()
 		Out(err); Nnl(2)
 		Out("[Press Enter to exit]"); Readline()
-		os.Exit(1)
+		memguard.SafeExit(1)
 	}
 	defer j.Close()
 
-	os.Exit(mainloop(passwd))
+	memguard.SafeExit(mainloop(passwd))
 }

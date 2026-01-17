@@ -9,6 +9,8 @@ import (
 	"os"
 	"slices"
 	"time"
+
+	"github.com/awnumar/memguard"
 )
 
 
@@ -191,7 +193,7 @@ func (j *JournalFile) read() error {
 }
 
 
-func OpenJournalFile(file string, password []byte) (*JournalFile, error) {
+func OpenJournalFile(file string, password *memguard.Enclave) (*JournalFile, error) {
 	j := JournalFile{}
 	j.Filepath = file
 	// check file
@@ -232,7 +234,7 @@ type EncryptedEntry struct {
 	EncryptedText []byte
 }
 
-func (e *EncryptedEntry) Decrypt(password []byte) (string, error) {
+func (e *EncryptedEntry) Decrypt(password *memguard.Enclave) (string, error) {
 	txt, err := DecryptText(password, e.EncryptedText, e.Salt, e.NoncePfx, e.Timestamp)
 	return txt, err
 }
@@ -241,7 +243,7 @@ func (e *EncryptedEntry) EtLength() uint32 {
 	return uint32(len(e.EncryptedText))
 }
 
-func NewEncryptedEntry(text string, password []byte) (*EncryptedEntry, error) {
+func NewEncryptedEntry(text string, password *memguard.Enclave) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
 	e.Timestamp = uint64(time.Now().UnixMicro())
 	ct, s, n, err := EncryptText(password, text, e.Timestamp)
