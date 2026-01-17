@@ -88,9 +88,6 @@ const A_RESET = "\u001b[3J\u001bc" // at least one of them should work
 const A_ERASE_REST_OF_LINE = "\u001b[0K"
 const A_ERASE_LINE = "\u001b[2K"
 
-// const A_SAVE_SCREEN = "\u001b[?47h"
-// const A_RESTORE_SCREEN = "\u001b[?47l"
-
 // Cursor
 
 const A_CUR_HOME = "\u001b[H"

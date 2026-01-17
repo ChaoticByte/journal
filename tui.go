@@ -77,18 +77,19 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 		Nl()
 	}
 
-	// output > and save cursor position
-	Nl(); Out("> ", A_SAVE_CUR_POS)
+	// print help line
 	if helpLine != "" {
-		Nnl(3)
+		Nl()
 		Out(Am(A_SET_UNDERLINE, A_SET_DIM), "commands:", Am(A_RESET_UNDERLINE, A_RESET_DIM))
 		Nnl(2)
 		Out(helpLine)
+		Nnl(2)
 	}
 
+	Nl()
 	for {
 		// read lines until a valid choice or command is entered
-		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
+		Out("> ")
 		a, _ := Readline()
 		for i, c := range choices {
 			if c[0] == a {
@@ -171,7 +172,7 @@ func mainloop(passwd []byte) int {
 	selMonth := ""
 	selEntry := uint64(1) // entry 0 is reserved, so use as default.
 
-	getHelpLine := func () string {
+	getHelp := func () string {
 		// returns the help line for the current mode
 		cmds := []string{}
 		addCmd := func(cmd string, expl string) {
@@ -191,7 +192,7 @@ func mainloop(passwd []byte) int {
 			addCmd("n", "New Entry")
 			addCmd("q", "Exit the program")
 		}
-		return strings.Join(cmds, "  ")
+		return strings.Join(cmds, "\n")
 	}
 
 	writeJournalFile := func () int {
@@ -314,7 +315,7 @@ func mainloop(passwd []byte) int {
 				choices,
 				commands,
 				prompt,
-				getHelpLine())
+				getHelp())
 
 			// prepare next iteration (or exit)
 			// based on user input
@@ -398,14 +399,14 @@ func mainloop(passwd []byte) int {
 			sel := MultiChoiceOrCommand(
 				[][2]string{},
 				[]string{"", "l", "q", "n", "delete"},
-				"", getHelpLine())
+				"", getHelp())
 
 			switch sel {
 			case -1:
 				mode = lastMode
 			case -2:
 				latest := j.GetLatestEntry()
-				if latest > 0 && latest != selEntry {
+				if latest > 0 {
 					selEntry = latest
 					mode = UiShowEntry
 				}
