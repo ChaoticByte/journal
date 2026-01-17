@@ -482,6 +482,10 @@ func mainloop(passwd []byte) int {
 				handleErr(err, "Error creating new entry")
 				continue
 			}
+
+			// empty input
+			builder.Reset()
+
 			err = j.AddEntry(e)
 			if err != nil {
 				handleErr(err, "Error adding new entry to journal")
