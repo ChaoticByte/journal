@@ -60,14 +60,14 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	go func() {
 		<-c
 		if j != nil { j.Close() }
-		Out(A_RESET, A_CUR_HOME)
+		Out(AS_RESET, AS_CUR_HOME)
 		memguard.SafeExit(0)
 	}()
 
 	defer Nl()
 
 	// output prompt, if any
-	if prompt != "" { Out(Am(A_SET_DIM), prompt, Am(A_RESET_DIM)); Nnl(2) }
+	if prompt != "" { Out(Am(AC_SET_DIM), prompt, Am(AC_RESET_DIM)); Nnl(2) }
 
 	// print choices, if any
 	if len(choices) > 0 {
@@ -81,7 +81,7 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	// print help line
 	if helpLine != "" {
 		Nl()
-		Out(Am(A_SET_UNDERLINE, A_SET_DIM), "commands:", Am(A_RESET_UNDERLINE, A_RESET_DIM))
+		Out(Am(AC_SET_UNDERLINE, AC_SET_DIM), "commands:", Am(AC_RESET_UNDERLINE, AC_RESET_DIM))
 		Nnl(2)
 		Out(helpLine)
 		Nnl(2)
@@ -111,7 +111,7 @@ func ReadPass() (*memguard.Enclave, error) {
 
 	Nl()
 	Out("[ ] ")
-	Out(A_SAVE_CUR_POS)
+	Out(AS_SAVE_CUR_POS)
 
 	// Handle SIGINT (+ manual cleanup of term.Readpassword)
 	fd := int(os.Stdout.Fd())
@@ -127,7 +127,7 @@ func ReadPass() (*memguard.Enclave, error) {
 	defer term.Restore(fd, s) // doppelt hält besser
 
 	for {
-		Out(A_RESTORE_CUR_POS, A_ERASE_REST_OF_LINE)
+		Out(AS_RESTORE_CUR_POS, AS_ERASE_REST_OF_LINE)
 		pw, err := term.ReadPassword(fd); Nl()
 		if err != nil || len(pw) > 0 {
 			encl := memguard.NewEnclave(pw)
@@ -153,8 +153,8 @@ const EntryTimeFormat = "Monday, 02. January 2006 15:04:05 MST"
 func mainloop(passwd *memguard.Enclave) int {
 
 	// erase screen and reset screen on exit.
-	Out(A_ERASE_SCREEN, A_CUR_HOME)
-	defer Out(A_RESET, A_CUR_HOME)
+	Out(AS_ERASE_SCREEN, AS_CUR_HOME)
+	defer Out(AS_RESET, AS_CUR_HOME)
 
 	// Handle SIGINT
 	c := make(chan os.Signal, 1)
@@ -162,7 +162,7 @@ func mainloop(passwd *memguard.Enclave) int {
 	go func() {
 		<-c
 		j.Close()
-		Out(A_RESET, A_CUR_HOME)
+		Out(AS_RESET, AS_CUR_HOME)
 		memguard.SafeExit(0)
 	}()
 	// :)
@@ -181,8 +181,8 @@ func mainloop(passwd *memguard.Enclave) int {
 		addCmd := func(cmd string, expl string) {
 			cmds = append(
 				cmds,
-				Am(A_SET_BOLD) + cmd + Am(A_RESET_BOLD) + " " +
-				Am(A_SET_DIM) + expl + Am(A_RESET_DIM))
+				Am(AC_SET_BOLD) + cmd + Am(AC_RESET_BOLD) + " " +
+				Am(AC_SET_DIM) + expl + Am(AC_RESET_DIM))
 		}
 		if mode != UiListYears {
 			addCmd("Enter", "back")
@@ -208,7 +208,7 @@ func mainloop(passwd *memguard.Enclave) int {
 		handleErr2 := func (err error, msg string) int {
 			Out(msg); Nl()
 			Out(err); Nnl(2)
-			Out(Am(A_SET_DIM), "[Press Enter to exit program]", Am(A_RESET_DIM))
+			Out(Am(AC_SET_DIM), "[Press Enter to exit program]", Am(AC_RESET_DIM))
 			Readline()
 			return 1
 		}
@@ -237,7 +237,7 @@ func mainloop(passwd *memguard.Enclave) int {
 	for { // the actual main loop
 
 		// reset screen and put cursor in the top left
-		Out(A_RESET, A_CUR_HOME); Nl()
+		Out(AS_RESET, AS_CUR_HOME); Nl()
 
 		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
 
@@ -381,15 +381,15 @@ func mainloop(passwd *memguard.Enclave) int {
 			if e != nil {
 				Out("[Decrypting ...] ")
 				txt, err := e.Decrypt(passwd)
-				Out("\r", A_ERASE_LINE)
+				Out("\r", AS_ERASE_LINE)
 				if err != nil {
 					Out("Entry could not be decrypted!"); Nl()
 					Out("Either the password is wrong or the entry is corrupted."); Nnl(2)
 				} else {
 					// Output Entry
-					Out(Am(A_SET_UNDERLINE),
+					Out(Am(AC_SET_UNDERLINE),
 						time.UnixMicro(int64(e.Timestamp)).Format(EntryTimeFormat),
-						Am(A_RESET_UNDERLINE))
+						Am(AC_RESET_UNDERLINE))
 					Nnl(4); Out(txt); Nnl(3)
 					txt = "" // don't keep the plaintext in memory
 				}
@@ -397,7 +397,7 @@ func mainloop(passwd *memguard.Enclave) int {
 				// this will likely never get called
 				// but catched a nil pointer deref
 				Out("Entry not found!"); Nnl(2)
-				Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM))
+				Out(Am(AC_SET_DIM), "[Press Enter to go back]", Am(AC_RESET_DIM))
 				Readline()
 				mode = lastMode
 				continue
@@ -434,7 +434,7 @@ func mainloop(passwd *memguard.Enclave) int {
 			case -6:
 				mode = UiNewEntry
 			case -7:
-				Nl(); Out(A_ERASE_REST_OF_SCREEN)
+				Nl(); Out(AS_ERASE_REST_OF_SCREEN)
 				answer := MultiChoiceOrCommand(
 					[][2]string{{"yes", ""}, {"no", ""}},
 					[]string{},
@@ -456,14 +456,14 @@ func mainloop(passwd *memguard.Enclave) int {
 			handleErr := func(err error, out ...any) {
 				Out(out...); Nl()
 				Out(err.Error()); Nnl(2)
-				Out(Am(A_SET_DIM), "[Press Enter to go back]", Am(A_RESET_DIM))
+				Out(Am(AC_SET_DIM), "[Press Enter to go back]", Am(AC_RESET_DIM))
 				Readline()
 				mode = lastMode
 			}
 
-			Out(Am(A_SET_DIM),
+			Out(Am(AC_SET_DIM),
 				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
-				Am(A_RESET_DIM))
+				Am(AC_RESET_DIM))
 			Nnl(2)
 
 			// read text from stdin (rune by rune)
@@ -513,7 +513,7 @@ func mainloop(passwd *memguard.Enclave) int {
 }
 
 func PrintVersion() {
-	Out(Am(A_SET_BOLD), "Journal " + Am(A_RESET_BOLD, A_COL_CYAN_FG) + Version + Am(A_COL_RESET_FG)); Nnl(2)
+	Out(Am(AC_SET_BOLD), "Journal " + Am(AC_RESET_BOLD, AC_COL_CYAN_FG) + Version + Am(AC_COL_RESET_FG)); Nnl(2)
 }
 
 func ShowUsageAndExit(a0 string, code int) {
@@ -541,7 +541,7 @@ func Entrypoint() {
 	}
 
 	// clear screen and go to top left corner
-	Out(A_ERASE_SCREEN, A_CUR_HOME); Nl()
+	Out(AS_ERASE_SCREEN, AS_CUR_HOME); Nl()
 
 	PrintVersion()
 
@@ -553,11 +553,11 @@ func Entrypoint() {
 		memguard.SafeExit(1)
 	}
 
-	Out("Opening journal file at ", Am(A_SET_DIM), a1, Am(A_RESET_DIM), " ...")
+	Out("Opening journal file at ", Am(AC_SET_DIM), a1, Am(AC_RESET_DIM), " ...")
 	Nnl(2);
 	j, err = OpenJournalFile(a1, passwd)
 	if err != nil { 
-		Out(Am(A_COL_RED_FG), "Couldn't open journal file!", Am(A_COL_RESET_FG))
+		Out(Am(AC_COL_RED_FG), "Couldn't open journal file!", Am(AC_COL_RESET_FG))
 		Nl()
 		Out(err); Nnl(2)
 		Out("[Press Enter to exit]"); Readline()
