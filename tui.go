@@ -512,7 +512,12 @@ func mainloop(passwd *memguard.Enclave) int {
 	}
 }
 
+func PrintVersion() {
+	Out(Am(A_SET_BOLD), "Journal " + Am(A_RESET_BOLD, A_COL_CYAN_FG) + Version + Am(A_COL_RESET_FG)); Nnl(2)
+}
+
 func ShowUsageAndExit(a0 string, code int) {
+	PrintVersion()
 	a0Parts := strings.Split(a0, "/")
 	binName := a0Parts[len(a0Parts)-1]
 	Out("Usage: ",
@@ -537,6 +542,8 @@ func Entrypoint() {
 
 	// clear screen and go to top left corner
 	Out(A_ERASE_SCREEN, A_CUR_HOME); Nl()
+
+	PrintVersion()
 
 	Out("Please enter your encryption key."); Nl()
 	passwd, err := ReadPass()
