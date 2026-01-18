@@ -1,6 +1,6 @@
 # Journal
 
-A simple, encrypted, journal for the terminal.
+A simple encrypted journal for the terminal.
 
 ## Compatibility
 

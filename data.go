@@ -1,5 +1,7 @@
 package main
 
+// Copyright (c) 2026, Julian Müller (ChaoticByte)
+
 import (
 	"crypto/rand"
 	"encoding/binary"
