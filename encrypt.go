@@ -78,9 +78,9 @@ func DecryptText(password *memguard.Enclave, ciphertext []byte, salt [12]byte, n
 
 // key derivation
 
-const a2_time = 10
+const a2_time = 6
 const a2_mem = 128*1024
-const a2_thr = 2
+const a2_thr = 4
 
 func derive_key(password []byte, salt [12]byte) [32]byte {
 	return [32]byte(
