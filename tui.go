@@ -67,13 +67,13 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	defer Nl()
 
 	// output prompt, if any
-	if prompt != "" { Out(Am(AC_SET_DIM), prompt, Am(AC_RESET_DIM)); Nnl(2) }
+	if prompt != "" { Out(prompt); Nnl(2) }
 
 	// print choices, if any
 	if len(choices) > 0 {
 		Nl()
 		for _, c := range choices {
-			Out(c[0], ") ", c[1]); Nl()
+			Out(" ", Am(AC_SET_BOLD), c[0], Am(AC_RESET_BOLD), "  ", c[1]); Nl()
 		}
 		Nl()
 	}
@@ -88,9 +88,10 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	}
 
 	Nl()
+	defer Out(Am(AC_COL_RESET_FG))
 	for {
 		// read lines until a valid choice or command is entered
-		Out("> ")
+		Out(Am(AC_SET_BOLD, AC_COL_BRIGHT_YELLOW_FG), "> ", Am(AC_RESET_BOLD, AC_COL_RESET_FG))
 		a, _ := Readline()
 		for i, c := range choices {
 			if c[0] == a {
@@ -181,7 +182,7 @@ func mainloop(passwd *memguard.Enclave) int {
 		addCmd := func(cmd string, expl string) {
 			cmds = append(
 				cmds,
-				Am(AC_SET_BOLD) + cmd + Am(AC_RESET_BOLD) + " " +
+				cmd + " " +
 				Am(AC_SET_DIM) + expl + Am(AC_RESET_DIM))
 		}
 		if mode != UiListYears {
@@ -237,7 +238,7 @@ func mainloop(passwd *memguard.Enclave) int {
 	for { // the actual main loop
 
 		// reset screen and put cursor in the top left
-		Out(AS_RESET, AS_CUR_HOME); Nl()
+		Out(AS_RESET, AS_CUR_HOME);
 
 		if mode == UiListYears || mode == UiListMonths || mode == UiListEntries {
 
@@ -301,11 +302,11 @@ func mainloop(passwd *memguard.Enclave) int {
 			if len(es) > 0 {
 				switch mode {
 				case UiListYears:
-					prompt = "Please select a year:"
+					prompt = "Please select a " + Am(AC_SET_UNDERLINE) + "year"+ Am(AC_RESET_UNDERLINE)
 				case UiListMonths:
-					prompt = "Please select a month:"
+					prompt = "Please select a " + Am(AC_SET_UNDERLINE) + "month"+ Am(AC_RESET_UNDERLINE)
 				case UiListEntries:
-					prompt = "Please select an entry:"
+					prompt = "Please select an " + Am(AC_SET_UNDERLINE) + "entry"+ Am(AC_RESET_UNDERLINE)
 				}
 			} else {
 				switch mode {
@@ -321,7 +322,7 @@ func mainloop(passwd *memguard.Enclave) int {
 			sel := MultiChoiceOrCommand(
 				choices,
 				commands,
-				prompt,
+				Am(AC_COL_BRIGHT_GREEN_FG) + prompt + Am(AC_COL_RESET_FG),
 				getHelp())
 
 			// prepare next iteration (or exit)
@@ -438,7 +439,7 @@ func mainloop(passwd *memguard.Enclave) int {
 				answer := MultiChoiceOrCommand(
 					[][2]string{{"yes", ""}, {"no", ""}},
 					[]string{},
-					"Are you sure that you want to delete this entry?", "")
+					"Do you really want to delete this entry?", "")
 				if answer == 0 {
 					mode = lastMode
 					j.DeleteEntry(selEntry)
@@ -461,9 +462,9 @@ func mainloop(passwd *memguard.Enclave) int {
 				mode = lastMode
 			}
 
-			Out(Am(AC_SET_DIM),
+			Out(Am(AC_COL_GREEN_FG),
 				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
-				Am(AC_RESET_DIM))
+				Am(AC_COL_RESET_FG))
 			Nnl(2)
 
 			// read text from stdin (rune by rune)
@@ -541,7 +542,7 @@ func Entrypoint() {
 	}
 
 	// clear screen and go to top left corner
-	Out(AS_ERASE_SCREEN, AS_CUR_HOME); Nl()
+	Out(AS_ERASE_SCREEN, AS_CUR_HOME);
 
 	PrintVersion()
 
