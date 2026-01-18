@@ -23,10 +23,10 @@ var UnknownFileReadErr = errors.New("Unknown file read error")
 var FileModifiedExternally = errors.New("The file was modified by another process since last read/write!")
 
 
-// Journal Version -> App Version
+// Journal Format Version -> App Version
 // 0 ->     < 1.0.0
 // 1 -> since 1.0.0
-const JournalVersion = uint8(0)
+const JournalFormatVersion = uint8(1)
 
 const JournalFileMode = 0o644
 
@@ -179,7 +179,7 @@ func (j *JournalFile) read() error {
 	data, err := io.ReadAll(f)
 	j.Version = data[0]
 	// Check if version is supported
-	if j.Version != JournalVersion {
+	if j.Version != JournalFormatVersion {
 		return UnsupportedJournalVersion
 	}
 	// read entries
@@ -207,7 +207,7 @@ func OpenJournalFile(file string, password *memguard.Enclave) (*JournalFile, err
 		e.Salt = salt
 		e.NoncePfx = noncePfx
 		// init journal
-		j.Version = JournalVersion
+		j.Version = JournalFormatVersion
 		j.entries = map[uint64]EncryptedEntry{}
 		err = j.AddEntry(e); if err != nil { return &j, err }
 		j.needWrite = true
