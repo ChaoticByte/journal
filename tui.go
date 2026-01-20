@@ -465,33 +465,56 @@ func mainloop(passwd *memguard.Enclave) int {
 				mode = lastMode
 			}
 
-			Out(Am(AC_COL_GREEN_FG),
-				"Write your new entry. Save it by hitting Ctrl+D in an empty line.",
-				Am(AC_COL_RESET_FG))
-			Nnl(2)
+			header := func () {
+				Out(Am(AC_COL_GREEN_FG),
+					"Write a new entry; ",
+					Am(AC_COL_RESET_FG, AC_SET_DIM),
+					"Save it by hitting ", Am(AC_RESET_DIM), "Ctrl+D",
+					Am(AC_SET_DIM), " in an empty line.\n",
+					"You can delete the previous line with ",
+					Am(AC_RESET_DIM), "dd", Am(AC_SET_DIM),
+					" and ", Am(AC_RESET_DIM), "Enter", Am(AC_RESET_DIM), ".")
+				Nnl(2)
+			}
+
+			header()
 
 			// read text from stdin (rune by rune)
-			builder := strings.Builder{}
-			reader := bufio.NewReader(os.Stdin)
+			lines := []string{}
 			for {
-				r, _, err := reader.ReadRune()
-				if err == io.EOF { break }
-				builder.WriteRune(r)
-				if err != nil {
+				line, err := Readline()
+				if err == io.EOF {
+					break
+				} else if err != nil {
 					handleErr(err, "Couldn't read terminal input")
+				}
+				if line == "dd" {
+					ll := len(lines)
+					if ll < 1 {
+						lines = []string{}
+					} else {
+						lines = lines[:ll-1]
+					}
+					Out(AS_RESET, AS_CUR_HOME)
+					header()
+					for _, l := range lines {
+						Out(l); Nl()
+					}
+				} else {
+					lines = append(lines, line)
 				}
 			}
 
 			// Try to create new EncryptedEntry from the input text
 
-			e, err := NewEncryptedEntry(strings.Trim(builder.String(), " \n"), passwd)
+			e, err := NewEncryptedEntry(strings.Trim(strings.Join(lines, "\n"), " \n"), passwd)
 			if err != nil {
 				handleErr(err, "Error creating new entry")
 				continue
 			}
 
 			// empty input
-			builder.Reset()
+			lines = nil
 
 			err = j.AddEntry(e)
 			if err != nil {
