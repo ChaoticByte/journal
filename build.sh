@@ -14,7 +14,5 @@ function build() {
 
 echo Output dir: ./dist/${VERSION}/
 
-build linux "386" i386
 build linux amd64 amd64
-build linux arm arm
 build linux arm64 arm64
