@@ -94,7 +94,8 @@ func MultiChoiceOrCommand(choices [][2]string, commands []string, prompt string,
 	for {
 		// read lines until a valid choice or command is entered
 		Out(Am(AC_SET_BOLD, AC_COL_BRIGHT_YELLOW_FG), "> ", Am(AC_RESET_BOLD, AC_COL_RESET_FG))
-		a, _ := Readline()
+		a, err := Readline()
+		if err == io.EOF { Nl(); continue }
 		for i, c := range choices {
 			if c[0] == a {
 				return i
