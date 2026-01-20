@@ -229,6 +229,8 @@ func OpenJournalFile(file string, password *memguard.Enclave) (*JournalFile, err
 }
 
 
+const MaxEntrySize = 4294967296-1 // 2^32 - 1
+
 type EncryptedEntry struct {
 	Timestamp uint64  // Unix time in microseconds, works until year 294246
 	Salt [12]byte
@@ -247,6 +249,9 @@ func (e *EncryptedEntry) EtLength() uint32 {
 
 func NewEncryptedEntry(text string, password *memguard.Enclave) (*EncryptedEntry, error) {
 	e := EncryptedEntry{}
+	if len(text) > (MaxEntrySize)-1 {
+		text = text[:MaxEntrySize+1]
+	}
 	e.Timestamp = uint64(time.Now().UnixMicro())
 	ct, s, n, err := EncryptText(password, text, e.Timestamp)
 	if err != nil {
