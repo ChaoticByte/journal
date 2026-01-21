@@ -1,0 +1,13 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.go"
+jobs:
+  run-tests:
+    runs-on: default
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+      - run: go test
