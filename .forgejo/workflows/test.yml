@@ -4,11 +4,13 @@ on:
       - main
     paths:
       - "*.go"
+      - "go.mod"
+      - "go.sum"
   workflow_dispatch:
 jobs:
   run-tests:
     runs-on: docker
-    container: "golang:1.25"
+    container: "golang:1.26"
     steps:
       - run: apt install git
       # always runs on code from main
