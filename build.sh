@@ -2,7 +2,7 @@
 
 VERSION=$(git describe --tags)
 
-if [ $VERSION = ""]; then
+if [ $VERSION = "" ]; then
     VERSION="dev"
 fi
 
