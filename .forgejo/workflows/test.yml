@@ -10,7 +10,7 @@ on:
 jobs:
   run-tests:
     runs-on: docker
-    container: "golang:1.26"
+    container: "golang:1.26.2"
     steps:
       - run: apt install git
       # always runs on code from main
